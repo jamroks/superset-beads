@@ -38,6 +38,7 @@ interface TabPaneProps {
 	availableTabs: Tab[];
 	onMoveToTab: (targetTabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 }
 
 export function TabPane({
@@ -53,6 +54,7 @@ export function TabPane({
 	availableTabs,
 	onMoveToTab,
 	onMoveToNewTab,
+	onPopOutToWindow,
 }: TabPaneProps) {
 	const paneName = useTabsStore((s) => s.panes[paneId]?.name);
 	const paneStatus = useTabsStore((s) => s.panes[paneId]?.status);
@@ -124,6 +126,7 @@ export function TabPane({
 				availableTabs={availableTabs}
 				onMoveToTab={onMoveToTab}
 				onMoveToNewTab={onMoveToNewTab}
+				onPopOutToWindow={onPopOutToWindow}
 				closeLabel="Close Terminal"
 			>
 				<div ref={terminalContainerRef} className="w-full h-full">

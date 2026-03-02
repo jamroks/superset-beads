@@ -150,6 +150,9 @@ export interface TabsStore extends TabsState {
 	// Move operations
 	movePaneToTab: (paneId: string, targetTabId: string) => void;
 	movePaneToNewTab: (paneId: string) => string;
+	duplicatePaneToNewTab: (
+		paneId: string,
+	) => { tabId: string; paneId: string } | null;
 
 	// Browser operations
 	addBrowserTab: (

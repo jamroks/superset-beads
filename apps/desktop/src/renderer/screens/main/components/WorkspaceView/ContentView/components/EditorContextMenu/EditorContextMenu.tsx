@@ -14,6 +14,7 @@ import {
 	LuClipboard,
 	LuClipboardCopy,
 	LuColumns2,
+	LuExternalLink,
 	LuFile,
 	LuLink,
 	LuMousePointerClick,
@@ -47,6 +48,7 @@ export interface PaneActions {
 	availableTabs: Tab[];
 	onMoveToTab: (tabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 }
 
 interface EditorContextMenuProps {
@@ -176,6 +178,12 @@ export function EditorContextMenu({
 						</ContextMenuItem>
 					</ContextMenuSubContent>
 				</ContextMenuSub>
+				{paneActions.onPopOutToWindow && (
+					<ContextMenuItem onSelect={paneActions.onPopOutToWindow}>
+						<LuExternalLink className="size-4" />
+						Duplicate in New Window
+					</ContextMenuItem>
+				)}
 				<ContextMenuSeparator />
 				<ContextMenuItem
 					variant="destructive"

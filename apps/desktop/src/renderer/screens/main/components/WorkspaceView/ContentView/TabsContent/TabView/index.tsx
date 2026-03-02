@@ -39,9 +39,11 @@ export function TabView({ tab }: TabViewProps) {
 	const setFocusedPane = useTabsStore((s) => s.setFocusedPane);
 	const movePaneToTab = useTabsStore((s) => s.movePaneToTab);
 	const movePaneToNewTab = useTabsStore((s) => s.movePaneToNewTab);
+	const duplicatePaneToNewTab = useTabsStore((s) => s.duplicatePaneToNewTab);
 	const hasAiChat = useFeatureFlagEnabled(FEATURE_FLAGS.AI_CHAT);
 	const allTabs = useTabsStore((s) => s.tabs);
 	const allPanes = useTabsStore((s) => s.panes);
+	const openWorkspaceWindow = electronTrpc.window.openWorkspaceWindow.useMutation();
 
 	// Get workspace path for file viewer panes
 	const { data: workspace } = electronTrpc.workspaces.get.useQuery(
@@ -137,6 +139,22 @@ export function TabView({ tab }: TabViewProps) {
 
 	const renderPane = useCallback(
 		(paneId: string, path: MosaicBranch[]) => {
+			const handlePopOutToWindow = async () => {
+				const duplicate = duplicatePaneToNewTab(paneId);
+				if (!duplicate) return;
+
+				try {
+					await openWorkspaceWindow.mutateAsync({
+						workspaceId: tab.workspaceId,
+						tabId: duplicate.tabId,
+						paneId: duplicate.paneId,
+					});
+				} catch (error) {
+					removeTab(duplicate.tabId);
+					console.error("[tabs] Failed to open popped-out window:", error);
+				}
+			};
+
 			const paneInfo = tabPanes[paneId];
 
 			if (!paneInfo) {
@@ -170,6 +188,7 @@ export function TabView({ tab }: TabViewProps) {
 						availableTabs={workspaceTabs}
 						onMoveToTab={(targetTabId) => movePaneToTab(paneId, targetTabId)}
 						onMoveToNewTab={() => movePaneToNewTab(paneId)}
+						onPopOutToWindow={() => void handlePopOutToWindow()}
 					/>
 				);
 			}
@@ -190,6 +209,7 @@ export function TabView({ tab }: TabViewProps) {
 						availableTabs={workspaceTabs}
 						onMoveToTab={(targetTabId) => movePaneToTab(paneId, targetTabId)}
 						onMoveToNewTab={() => movePaneToNewTab(paneId)}
+						onPopOutToWindow={() => void handlePopOutToWindow()}
 					/>
 				);
 			}
@@ -238,6 +258,7 @@ export function TabView({ tab }: TabViewProps) {
 					availableTabs={workspaceTabs}
 					onMoveToTab={(targetTabId) => movePaneToTab(paneId, targetTabId)}
 					onMoveToNewTab={() => movePaneToNewTab(paneId)}
+					onPopOutToWindow={() => void handlePopOutToWindow()}
 				/>
 			);
 		},
@@ -254,6 +275,9 @@ export function TabView({ tab }: TabViewProps) {
 			workspaceTabs,
 			movePaneToTab,
 			movePaneToNewTab,
+			duplicatePaneToNewTab,
+			openWorkspaceWindow,
+			removeTab,
 			hasAiChat,
 		],
 	);

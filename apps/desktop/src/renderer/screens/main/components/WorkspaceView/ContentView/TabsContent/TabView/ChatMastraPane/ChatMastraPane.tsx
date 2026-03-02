@@ -55,6 +55,7 @@ interface ChatMastraPaneProps {
 	availableTabs: Tab[];
 	onMoveToTab: (targetTabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 }
 
 function toSessionSelectorItem(session: {
@@ -137,6 +138,7 @@ export function ChatMastraPane({
 	availableTabs,
 	onMoveToTab,
 	onMoveToNewTab,
+	onPopOutToWindow,
 }: ChatMastraPaneProps) {
 	const pane = useTabsStore((state) => state.panes[paneId]);
 	const switchChatMastraSession = useTabsStore(
@@ -453,6 +455,7 @@ export function ChatMastraPane({
 						availableTabs={availableTabs}
 						onMoveToTab={onMoveToTab}
 						onMoveToNewTab={onMoveToNewTab}
+						onPopOutToWindow={onPopOutToWindow}
 						closeLabel="Close Chat"
 					>
 						<div className="h-full w-full">

@@ -44,6 +44,7 @@ export interface DiffViewerContextMenuProps {
 	availableTabs: Tab[];
 	onMoveToTab: (tabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 }
 
 interface DiffViewerProps {
@@ -322,6 +323,7 @@ export function DiffViewer({
 		availableTabs: contextMenuProps.availableTabs,
 		onMoveToTab: contextMenuProps.onMoveToTab,
 		onMoveToNewTab: contextMenuProps.onMoveToNewTab,
+		onPopOutToWindow: contextMenuProps.onPopOutToWindow,
 	};
 
 	return (

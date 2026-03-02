@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import type { BrowserWindow } from "electron";
 import { dialog } from "electron";
+import { openWorkspaceWindow } from "main/lib/window-manager";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
 
@@ -46,6 +47,19 @@ export const createWindowRouter = (getWindow: () => BrowserWindow | null) => {
 		getHomeDir: publicProcedure.query(() => {
 			return homedir();
 		}),
+
+		openWorkspaceWindow: publicProcedure
+			.input(
+				z.object({
+					workspaceId: z.string().min(1),
+					tabId: z.string().optional(),
+					paneId: z.string().optional(),
+				}),
+			)
+			.mutation(({ input }) => {
+				openWorkspaceWindow(input);
+				return { success: true };
+			}),
 
 		selectDirectory: publicProcedure
 			.input(

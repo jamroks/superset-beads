@@ -1,8 +1,7 @@
 import { join } from "node:path";
 import { workspaces, worktrees } from "@superset/local-db";
 import { eq } from "drizzle-orm";
-import type { BrowserWindow } from "electron";
-import { app, Notification, nativeTheme } from "electron";
+import { app, BrowserWindow, Notification, nativeTheme } from "electron";
 import { createWindow } from "lib/electron-app/factories/windows/create";
 import { createAppRouter } from "lib/trpc/routers";
 import { localDb } from "main/lib/local-db";
@@ -34,6 +33,7 @@ import {
 	saveWindowState,
 } from "../lib/window-state";
 import { getWorkspaceRuntimeRegistry } from "../lib/workspace-runtime";
+import { registerIpcWindowHandler } from "../lib/window-manager";
 
 // Singleton IPC handler to prevent duplicate handlers on window reopen (macOS)
 let ipcHandler: ReturnType<typeof createIPCHandler> | null = null;
@@ -63,7 +63,7 @@ function getWorkspaceNameFromDb(workspaceId: string | undefined): string {
 let currentWindow: BrowserWindow | null = null;
 
 // Routers receive this getter so they always see the current window, not a stale reference
-const getWindow = () => currentWindow;
+const getWindow = () => BrowserWindow.getFocusedWindow() ?? currentWindow;
 
 // invalidate() alone may not rebuild corrupted GPU layers — a tiny resize
 // forces Chromium to reconstruct the compositor layer tree.
@@ -143,6 +143,7 @@ export async function MainWindow() {
 			windows: [window],
 		});
 	}
+	registerIpcWindowHandler(ipcHandler);
 
 	const server = notificationsApp.listen(
 		env.DESKTOP_NOTIFICATIONS_PORT,

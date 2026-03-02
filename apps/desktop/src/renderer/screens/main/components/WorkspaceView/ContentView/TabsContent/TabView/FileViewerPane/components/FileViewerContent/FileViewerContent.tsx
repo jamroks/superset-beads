@@ -96,6 +96,7 @@ interface FileViewerContentProps {
 	availableTabs: Tab[];
 	onMoveToTab: (tabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 	// Markdown search props
 	markdownContainerRef: RefObject<HTMLDivElement | null>;
 	markdownSearch: {
@@ -142,6 +143,7 @@ export function FileViewerContent({
 	availableTabs,
 	onMoveToTab,
 	onMoveToNewTab,
+	onPopOutToWindow,
 	// Markdown search props
 	markdownContainerRef,
 	markdownSearch,
@@ -254,6 +256,7 @@ export function FileViewerContent({
 					availableTabs,
 					onMoveToTab,
 					onMoveToNewTab,
+					onPopOutToWindow,
 				}}
 			/>
 		);
@@ -368,6 +371,7 @@ export function FileViewerContent({
 			availableTabs={availableTabs}
 			onMoveToTab={onMoveToTab}
 			onMoveToNewTab={onMoveToNewTab}
+			onPopOutToWindow={onPopOutToWindow}
 		>
 			<div className="w-full h-full">
 				<Editor

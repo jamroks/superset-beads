@@ -78,6 +78,8 @@ function WorkspacePage() {
 	const navigate = useNavigate();
 	const routeNavigate = Route.useNavigate();
 	const { tabId: searchTabId, paneId: searchPaneId } = Route.useSearch();
+	const allTabs = useTabsStore((s) => s.tabs);
+	const allPanes = useTabsStore((s) => s.panes);
 
 	// Keep the file open mode cache warm for addFileViewerPane
 	useFileOpenMode();
@@ -87,19 +89,26 @@ function WorkspacePage() {
 		if (!searchTabId) return;
 
 		const state = useTabsStore.getState();
-		const tab = state.tabs.find(
+		const tab = allTabs.find(
 			(t) => t.id === searchTabId && t.workspaceId === workspaceId,
 		);
 		if (!tab) return;
 
 		state.setActiveTab(workspaceId, searchTabId);
 
-		if (searchPaneId && state.panes[searchPaneId]) {
+		if (searchPaneId && allPanes[searchPaneId]) {
 			state.setFocusedPane(searchTabId, searchPaneId);
 		}
 
 		routeNavigate({ search: {}, replace: true });
-	}, [searchTabId, searchPaneId, workspaceId, routeNavigate]);
+	}, [
+		searchTabId,
+		searchPaneId,
+		workspaceId,
+		routeNavigate,
+		allTabs,
+		allPanes,
+	]);
 
 	// Check if workspace is initializing or failed
 	const isInitializing = useIsWorkspaceInitializing(workspaceId);
@@ -117,7 +126,6 @@ function WorkspacePage() {
 	// - Interrupted workspaces that aren't currently initializing (shows resume option)
 	const showInitView = isInitializing || hasFailed || hasIncompleteInit;
 
-	const allTabs = useTabsStore((s) => s.tabs);
 	const activeTabIds = useTabsStore((s) => s.activeTabIds);
 	const tabHistoryStacks = useTabsStore((s) => s.tabHistoryStacks);
 	const focusedPaneIds = useTabsStore((s) => s.focusedPaneIds);

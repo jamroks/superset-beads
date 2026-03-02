@@ -17,6 +17,7 @@ import {
 	LuClipboardCopy,
 	LuColumns2,
 	LuEraser,
+	LuExternalLink,
 	LuMoveRight,
 	LuPlus,
 	LuRows2,
@@ -43,6 +44,7 @@ interface TabContentContextMenuProps {
 	availableTabs: Tab[];
 	onMoveToTab: (tabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 	closeLabel?: string;
 }
 
@@ -59,6 +61,7 @@ export function TabContentContextMenu({
 	availableTabs,
 	onMoveToTab,
 	onMoveToNewTab,
+	onPopOutToWindow,
 	closeLabel = "Close Pane",
 }: TabContentContextMenuProps) {
 	// Filter out current tab from available targets
@@ -169,6 +172,12 @@ export function TabContentContextMenu({
 						</ContextMenuItem>
 					</ContextMenuSubContent>
 				</ContextMenuSub>
+				{onPopOutToWindow && (
+					<ContextMenuItem onSelect={onPopOutToWindow}>
+						<LuExternalLink className="size-4" />
+						Duplicate in New Window
+					</ContextMenuItem>
+				)}
 				<ContextMenuSeparator />
 				<ContextMenuItem variant="destructive" onSelect={onClosePane}>
 					<LuX className="size-4" />

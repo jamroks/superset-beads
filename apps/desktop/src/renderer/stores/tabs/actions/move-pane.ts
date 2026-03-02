@@ -19,6 +19,42 @@ interface MovePaneResult {
 	tabHistoryStacks: Record<string, string[]>;
 }
 
+interface DuplicatePaneResult extends MovePaneResult {
+	newTabId: string;
+	newPaneId: string;
+}
+
+function clonePaneForDuplication(pane: Pane, targetTabId: string): Pane {
+	const duplicate: Pane = {
+		...pane,
+		id: generateId("pane"),
+		tabId: targetTabId,
+		fileViewer: pane.fileViewer ? { ...pane.fileViewer } : undefined,
+		chatMastra: pane.chatMastra ? { ...pane.chatMastra } : undefined,
+		browser: pane.browser
+			? {
+					...pane.browser,
+					history: pane.browser.history.map((entry) => ({ ...entry })),
+					error: pane.browser.error ? { ...pane.browser.error } : pane.browser.error,
+					viewport: pane.browser.viewport
+						? { ...pane.browser.viewport }
+						: pane.browser.viewport,
+				}
+			: undefined,
+		devtools: pane.devtools ? { ...pane.devtools } : undefined,
+	};
+
+	if (duplicate.type === "terminal") {
+		duplicate.isNew = true;
+		duplicate.status = undefined;
+		duplicate.initialCwd = pane.cwd ?? pane.initialCwd;
+		duplicate.cwd = undefined;
+		duplicate.cwdConfirmed = undefined;
+	}
+
+	return duplicate;
+}
+
 export function movePaneToTab(
 	state: TabsState,
 	paneId: string,
@@ -147,5 +183,42 @@ export function movePaneToNewTab(
 			},
 		},
 		newTabId,
+	};
+}
+
+export function duplicatePaneToNewTab(
+	state: TabsState,
+	paneId: string,
+): DuplicatePaneResult | null {
+	const pane = state.panes[paneId];
+	if (!pane) return null;
+
+	const sourceTab = state.tabs.find((t) => t.id === pane.tabId);
+	if (!sourceTab) return null;
+
+	const workspaceId = sourceTab.workspaceId;
+	const newTabId = generateId("tab");
+	const duplicatePane = clonePaneForDuplication(pane, newTabId);
+	const workspaceTabs = state.tabs.filter((t) => t.workspaceId === workspaceId);
+
+	const newTab: Tab = {
+		id: newTabId,
+		name: generateTabName(workspaceTabs),
+		workspaceId,
+		layout: duplicatePane.id as MosaicNode<string>,
+		createdAt: Date.now(),
+	};
+
+	return {
+		tabs: [...state.tabs, newTab],
+		panes: { ...state.panes, [duplicatePane.id]: duplicatePane },
+		activeTabIds: { ...state.activeTabIds },
+		focusedPaneIds: {
+			...state.focusedPaneIds,
+			[newTabId]: duplicatePane.id,
+		},
+		tabHistoryStacks: { ...state.tabHistoryStacks },
+		newTabId,
+		newPaneId: duplicatePane.id,
 	};
 }

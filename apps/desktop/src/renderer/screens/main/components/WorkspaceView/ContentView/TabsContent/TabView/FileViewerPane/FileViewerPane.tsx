@@ -41,6 +41,7 @@ interface FileViewerPaneProps {
 	availableTabs: Tab[];
 	onMoveToTab: (targetTabId: string) => void;
 	onMoveToNewTab: () => void;
+	onPopOutToWindow?: () => void;
 }
 
 export function FileViewerPane({
@@ -56,6 +57,7 @@ export function FileViewerPane({
 	availableTabs,
 	onMoveToTab,
 	onMoveToNewTab,
+	onPopOutToWindow,
 }: FileViewerPaneProps) {
 	// Use granular selector to only get this pane's fileViewer data
 	const fileViewer = useTabsStore((s) => s.panes[paneId]?.fileViewer);
@@ -333,6 +335,7 @@ export function FileViewerPane({
 					availableTabs={availableTabs}
 					onMoveToTab={onMoveToTab}
 					onMoveToNewTab={onMoveToNewTab}
+					onPopOutToWindow={onPopOutToWindow}
 					// Markdown search props
 					markdownContainerRef={markdownContainerRef}
 					markdownSearch={markdownSearch}
