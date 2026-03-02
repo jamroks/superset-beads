@@ -20,6 +20,7 @@ interface TabPaneProps {
 	path: MosaicBranch[];
 	tabId: string;
 	workspaceId: string;
+	workspaceName?: string;
 	splitPaneAuto: (
 		tabId: string,
 		sourcePaneId: string,
@@ -48,6 +49,7 @@ export function TabPane({
 	path,
 	tabId,
 	workspaceId,
+	workspaceName,
 	splitPaneAuto,
 	splitPaneHorizontal,
 	splitPaneVertical,
@@ -93,6 +95,7 @@ export function TabPane({
 		openPaneWindowMutation.mutate({
 			paneId,
 			paneName: paneName || "Terminal",
+			workspaceName: workspaceName?.trim() || undefined,
 		});
 	};
 

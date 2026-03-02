@@ -9,6 +9,7 @@ const paneWindows = new Map<string, BrowserWindow>();
 interface OpenPaneWindowInput {
 	paneId: string;
 	paneName?: string;
+	workspaceName?: string;
 }
 
 interface OpenPaneWindowResult {
@@ -18,9 +19,18 @@ interface OpenPaneWindowResult {
 export function openPaneWindow({
 	paneId,
 	paneName,
+	workspaceName,
 }: OpenPaneWindowInput): OpenPaneWindowResult {
+	const trimmedPaneName = paneName?.trim();
+	const trimmedWorkspaceName = workspaceName?.trim();
+	const windowTitle =
+		trimmedPaneName && trimmedWorkspaceName
+			? `${trimmedPaneName} - ${trimmedWorkspaceName}`
+			: trimmedPaneName || trimmedWorkspaceName || "Pane";
+
 	const existingWindow = paneWindows.get(paneId);
 	if (existingWindow && !existingWindow.isDestroyed()) {
+		existingWindow.setTitle(windowTitle);
 		if (existingWindow.isMinimized()) {
 			existingWindow.restore();
 		}
@@ -28,9 +38,6 @@ export function openPaneWindow({
 		existingWindow.focus();
 		return { reused: true };
 	}
-
-	const trimmedPaneName = paneName?.trim();
-	const windowTitle = trimmedPaneName ? `${trimmedPaneName} - Pane` : "Pane";
 
 	const window = createWindow({
 		id: "pane",

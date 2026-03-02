@@ -230,6 +230,7 @@ export function TabView({ tab }: TabViewProps) {
 					path={path}
 					tabId={tab.id}
 					workspaceId={tab.workspaceId}
+					workspaceName={workspace?.name}
 					splitPaneAuto={splitPaneAuto}
 					splitPaneHorizontal={splitPaneHorizontal}
 					splitPaneVertical={splitPaneVertical}
@@ -255,6 +256,7 @@ export function TabView({ tab }: TabViewProps) {
 			movePaneToTab,
 			movePaneToNewTab,
 			hasAiChat,
+			workspace?.name,
 		],
 	);
 

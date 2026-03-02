@@ -39,6 +39,7 @@ export const createWindowRouter = (getWindow: () => BrowserWindow | null) => {
 				z.object({
 					paneId: z.string().min(1),
 					paneName: z.string().optional(),
+					workspaceName: z.string().optional(),
 				}),
 			)
 			.mutation(({ input }) => {
