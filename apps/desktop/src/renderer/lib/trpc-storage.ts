@@ -30,6 +30,8 @@ function createTrpcStorageAdapter(config: TrpcStorageConfig): StateStorage {
 	let flushTimer: ReturnType<typeof setTimeout> | null = null;
 	let isFlushing = false;
 
+	const getPendingSnapshotKey = (name: string) => `${name}:pending`;
+
 	const flushPendingWrite = async (name: string): Promise<void> => {
 		if (isFlushing || pendingValue === null) return;
 		const valueToFlush = pendingValue;
@@ -49,6 +51,12 @@ function createTrpcStorageAdapter(config: TrpcStorageConfig): StateStorage {
 			localStorage.setItem(`${name}:version`, String(parsed.version));
 			await config.set(parsed.state);
 			lastFlushedValue = valueToFlush;
+
+			// Clear crash-recovery snapshot only if this exact value was flushed.
+			const pendingSnapshotKey = getPendingSnapshotKey(name);
+			if (localStorage.getItem(pendingSnapshotKey) === valueToFlush) {
+				localStorage.removeItem(pendingSnapshotKey);
+			}
 		} catch (error) {
 			console.error("[trpc-storage] Failed to set state:", error);
 		} finally {
@@ -69,6 +77,24 @@ function createTrpcStorageAdapter(config: TrpcStorageConfig): StateStorage {
 	return {
 		getItem: async (name: string): Promise<string | null> => {
 			try {
+				// Prefer the latest pending snapshot to avoid dropping state on fast exit.
+				const pendingSnapshot = localStorage.getItem(
+					getPendingSnapshotKey(name),
+				);
+				if (pendingSnapshot) {
+					// Ensure pending snapshot eventually syncs to appState.
+					if (pendingValue === null) {
+						pendingValue = pendingSnapshot;
+					}
+					if (!isFlushing && flushTimer === null) {
+						flushTimer = setTimeout(() => {
+							flushTimer = null;
+							void flushPendingWrite(name);
+						}, 0);
+					}
+					return pendingSnapshot;
+				}
+
 				const state = await config.get();
 				if (!state) return null;
 				// Version is stored in localStorage as a sidecar since the
@@ -89,6 +115,7 @@ function createTrpcStorageAdapter(config: TrpcStorageConfig): StateStorage {
 			}
 
 			pendingValue = value;
+			localStorage.setItem(getPendingSnapshotKey(name), value);
 			if (flushTimer) {
 				clearTimeout(flushTimer);
 				flushTimer = null;

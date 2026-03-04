@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import type { EnrichedPort } from "shared/types";
 
+const PORTS_FALLBACK_REFETCH_INTERVAL_MS = 30_000;
+
 export interface WorkspacePortGroup {
 	workspaceId: string;
 	workspaceName: string;
@@ -13,7 +15,13 @@ export function usePortsData() {
 
 	const utils = electronTrpc.useUtils();
 
-	const { data: detectedPorts } = electronTrpc.ports.getAll.useQuery();
+	const { data: detectedPorts } = electronTrpc.ports.getAll.useQuery(
+		undefined,
+		{
+			// Keep a low-frequency safety net in case subscription events are missed.
+			refetchInterval: PORTS_FALLBACK_REFETCH_INTERVAL_MS,
+		},
+	);
 
 	electronTrpc.ports.subscribe.useSubscription(undefined, {
 		onData: () => {

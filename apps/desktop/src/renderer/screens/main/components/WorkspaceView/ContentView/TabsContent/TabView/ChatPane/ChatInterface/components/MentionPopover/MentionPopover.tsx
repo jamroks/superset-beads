@@ -87,7 +87,8 @@ export function MentionProvider({
 			setOpen(true);
 		}
 	}, [textInput.value]);
-	const debouncedSearchQuery = useDebouncedValue(searchQuery.trim(), 120);
+	const immediateSearchQuery = searchQuery.trim();
+	const debouncedSearchQuery = useDebouncedValue(immediateSearchQuery, 120);
 
 	// File search via chatService (IPC to main process)
 	const { data: fileResults } = chatServiceTrpc.workspace.searchFiles.useQuery(
@@ -98,13 +99,18 @@ export function MentionProvider({
 			limit: MAX_RESULTS,
 		},
 		{
-			enabled: open && debouncedSearchQuery.length > 0 && !!cwd,
+			enabled:
+				open &&
+				immediateSearchQuery.length > 0 &&
+				debouncedSearchQuery.length > 0 &&
+				!!cwd,
 			staleTime: 1000,
 			placeholderData: (previous) => previous ?? [],
 		},
 	);
 
-	const files = fileResults ?? [];
+	const files =
+		open && immediateSearchQuery.length > 0 ? (fileResults ?? []) : [];
 
 	const handleSelectFile = (relativePath: string) => {
 		const current = textInput.value;
