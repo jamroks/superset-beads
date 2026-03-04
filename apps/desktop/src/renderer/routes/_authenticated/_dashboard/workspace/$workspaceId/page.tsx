@@ -36,6 +36,9 @@ import {
 	useHasWorkspaceFailed,
 	useIsWorkspaceInitializing,
 } from "renderer/stores/workspace-init";
+import { shallow } from "zustand/shallow";
+
+const EMPTY_HISTORY_STACK: string[] = [];
 
 export const Route = createFileRoute(
 	"/_authenticated/_dashboard/workspace/$workspaceId/",
@@ -116,10 +119,19 @@ function WorkspacePage() {
 	// - Interrupted workspaces that aren't currently initializing (shows resume option)
 	const showInitView = isInitializing || hasFailed || hasIncompleteInit;
 
-	const allTabs = useTabsStore((s) => s.tabs);
-	const activeTabIds = useTabsStore((s) => s.activeTabIds);
-	const tabHistoryStacks = useTabsStore((s) => s.tabHistoryStacks);
-	const focusedPaneIds = useTabsStore((s) => s.focusedPaneIds);
+	const tabs = useTabsStore(
+		useCallback(
+			(s) => s.tabs.filter((tab) => tab.workspaceId === workspaceId),
+			[workspaceId],
+		),
+		shallow,
+	);
+	const activeTabIdForWorkspace = useTabsStore(
+		(s) => s.activeTabIds[workspaceId] ?? null,
+	);
+	const tabHistoryStack = useTabsStore(
+		(s) => s.tabHistoryStacks[workspaceId] ?? EMPTY_HISTORY_STACK,
+	);
 	const {
 		addTab,
 		splitPaneAuto,
@@ -140,26 +152,26 @@ function WorkspacePage() {
 	const currentSidebarMode = useSidebarStore((s) => s.currentMode);
 	const setSidebarMode = useSidebarStore((s) => s.setMode);
 
-	const tabs = useMemo(
-		() => allTabs.filter((tab) => tab.workspaceId === workspaceId),
-		[workspaceId, allTabs],
-	);
-
 	const activeTabId = useMemo(() => {
 		return resolveActiveTabIdForWorkspace({
 			workspaceId,
 			tabs,
-			activeTabIds,
-			tabHistoryStacks,
+			activeTabIds: { [workspaceId]: activeTabIdForWorkspace },
+			tabHistoryStacks: { [workspaceId]: tabHistoryStack },
 		});
-	}, [workspaceId, tabs, activeTabIds, tabHistoryStacks]);
+	}, [workspaceId, tabs, activeTabIdForWorkspace, tabHistoryStack]);
 
 	const activeTab = useMemo(
 		() => (activeTabId ? tabs.find((t) => t.id === activeTabId) : null),
 		[activeTabId, tabs],
 	);
 
-	const focusedPaneId = activeTabId ? focusedPaneIds[activeTabId] : null;
+	const focusedPaneId = useTabsStore(
+		useCallback(
+			(s) => (activeTabId ? (s.focusedPaneIds[activeTabId] ?? null) : null),
+			[activeTabId],
+		),
+	);
 
 	const { presets } = usePresets();
 
