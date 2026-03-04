@@ -4,6 +4,7 @@ import {
 	SidebarMode,
 	useSidebarStore,
 } from "renderer/stores/sidebar-state";
+import { shallow } from "zustand/shallow";
 import { ResizablePanel } from "../../ResizablePanel";
 import { ChangesContent, ScrollProvider } from "../ChangesContent";
 import { ContentView } from "../ContentView";
@@ -19,7 +20,17 @@ export function WorkspaceLayout() {
 		isResizing,
 		setIsResizing,
 		currentMode,
-	} = useSidebarStore();
+	} = useSidebarStore(
+		(s) => ({
+			isSidebarOpen: s.isSidebarOpen,
+			sidebarWidth: s.sidebarWidth,
+			setSidebarWidth: s.setSidebarWidth,
+			isResizing: s.isResizing,
+			setIsResizing: s.setIsResizing,
+			currentMode: s.currentMode,
+		}),
+		shallow,
+	);
 
 	const isExpanded = currentMode === SidebarMode.Changes;
 

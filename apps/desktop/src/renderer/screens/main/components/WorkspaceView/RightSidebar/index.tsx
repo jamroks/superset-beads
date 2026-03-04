@@ -19,6 +19,7 @@ import {
 } from "renderer/stores/sidebar-state";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
+import { shallow } from "zustand/shallow";
 import { useScrollContext } from "../ChangesContent";
 import { ChangesView } from "./ChangesView";
 import { FilesView } from "./FilesView";
@@ -91,7 +92,17 @@ export function RightSidebar() {
 		toggleSidebar,
 		setMode,
 		sidebarWidth,
-	} = useSidebarStore();
+	} = useSidebarStore(
+		(s) => ({
+			currentMode: s.currentMode,
+			rightSidebarTab: s.rightSidebarTab,
+			setRightSidebarTab: s.setRightSidebarTab,
+			toggleSidebar: s.toggleSidebar,
+			setMode: s.setMode,
+			sidebarWidth: s.sidebarWidth,
+		}),
+		shallow,
+	);
 	const isExpanded = currentMode === SidebarMode.Changes;
 	const compactTabs = sidebarWidth < 250;
 	const showChangesTab = !!worktreePath;
