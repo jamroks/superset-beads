@@ -18,6 +18,7 @@ import {
 	refreshDefaultBranch,
 } from "../utils/git";
 import { fetchGitHubPRStatus } from "../utils/github";
+import { tryRepairWorktreePath } from "../utils/repair-worktree-path";
 
 export const createGitStatusProcedures = () => {
 	return router({
@@ -61,8 +62,17 @@ export const createGitStatusProcedures = () => {
 
 				await fetchDefaultBranch(project.mainRepoPath, defaultBranch);
 
+				// Repair stale worktree path if directory was moved/unnested
+				let worktreePath = worktree.path;
+				if (!existsSync(worktreePath)) {
+					const repairedPath = await tryRepairWorktreePath(worktree.id);
+					if (repairedPath) {
+						worktreePath = repairedPath;
+					}
+				}
+
 				const { ahead, behind } = await getAheadBehindCount({
-					repoPath: worktree.path,
+					repoPath: worktreePath,
 					defaultBranch,
 				});
 
