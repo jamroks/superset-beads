@@ -30,6 +30,23 @@ const TEST_PATHS: ShellWrapperPaths = {
 	BASH_DIR: TEST_BASH_DIR,
 };
 
+function isZshAvailable(): boolean {
+	try {
+		execFileSync("zsh", ["-lc", "exit 0"], { stdio: "ignore" });
+		return true;
+	} catch (error) {
+		const errorCode =
+			typeof error === "object" &&
+			error !== null &&
+			"code" in error &&
+			typeof error.code === "string"
+				? error.code
+				: "";
+		if (errorCode === "ENOENT") return false;
+		throw error;
+	}
+}
+
 describe("shell-wrappers", () => {
 	beforeEach(() => {
 		mkdirSync(TEST_BIN_DIR, { recursive: true });
@@ -105,22 +122,7 @@ describe("shell-wrappers", () => {
 	});
 
 	it("reproduces pre-fix .zlogin behavior where system node wins", () => {
-		try {
-			execFileSync("zsh", ["-lc", "exit 0"], { stdio: "ignore" });
-		} catch (error) {
-			const errorCode =
-				typeof error === "object" &&
-				error !== null &&
-				"code" in error &&
-				typeof error.code === "string"
-					? error.code
-					: "";
-			if (errorCode === "ENOENT") {
-				// zsh may not exist in all test environments.
-				return;
-			}
-			throw error;
-		}
+		if (!isZshAvailable()) return;
 
 		const integrationRoot = path.join(TEST_ROOT, "zlogin-node-repro");
 		const integrationBinDir = path.join(integrationRoot, "superset-bin");
@@ -383,20 +385,7 @@ echo wrapper
 	});
 
 	it("zsh BIN_DIR survives a mise-style precmd that resets PATH", () => {
-		// Skip if zsh is not available
-		try {
-			execFileSync("zsh", ["-lc", "exit 0"], { stdio: "ignore" });
-		} catch (error) {
-			const errorCode =
-				typeof error === "object" &&
-				error !== null &&
-				"code" in error &&
-				typeof error.code === "string"
-					? error.code
-					: "";
-			if (errorCode === "ENOENT") return;
-			throw error;
-		}
+		if (!isZshAvailable()) return;
 
 		const integrationRoot = path.join(TEST_ROOT, "mise-precmd-repro");
 		const integrationBinDir = path.join(integrationRoot, "superset-bin");
