@@ -71,6 +71,10 @@ describe("shell-wrappers", () => {
 			zshrc.indexOf('source "$_superset_home/.zshrc"'),
 		);
 
+		// precmd hook should be registered to survive PATH resets by tools like mise/asdf
+		expect(zshrc).toContain("add-zsh-hook precmd _superset_ensure_path");
+		expect(zshrc).toContain("_superset_ensure_path()");
+
 		expect(zlogin).toContain("if [[ -o interactive ]]; then");
 		expect(zlogin).toContain('export ZDOTDIR="$_superset_home"');
 		expect(zlogin).toContain('source "$_superset_home/.zlogin"');

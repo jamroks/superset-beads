@@ -98,6 +98,23 @@ function buildPathPrependFunction(binDir: string): string {
 _superset_prepend_bin`;
 }
 
+/**
+ * Build a zsh precmd hook that re-asserts BIN_DIR in PATH.
+ * Tools like mise/asdf register precmd hooks that reconstruct PATH,
+ * which can remove our BIN_DIR. By also using a precmd hook, we ensure
+ * BIN_DIR survives dynamic PATH modifications.
+ */
+function buildZshPrecmdHook(binDir: string): string {
+	return `autoload -Uz add-zsh-hook 2>/dev/null
+_superset_ensure_path() {
+  case ":$PATH:" in
+    *:"${binDir}":*) ;;
+    *) PATH="${binDir}:$PATH" ;;
+  esac
+}
+add-zsh-hook precmd _superset_ensure_path`;
+}
+
 function escapeFishDoubleQuoted(value: string): string {
 	return value
 		.replaceAll("\\", "\\\\")
@@ -140,6 +157,7 @@ _superset_home="\${SUPERSET_ORIG_ZDOTDIR:-$HOME}"
 export ZDOTDIR="$_superset_home"
 [[ -f "$_superset_home/.zshrc" ]] && source "$_superset_home/.zshrc"
 ${buildPathPrependFunction(paths.BIN_DIR)}
+${buildZshPrecmdHook(paths.BIN_DIR)}
 rehash 2>/dev/null || true
 # Restore ZDOTDIR so our .zlogin runs after user's .zlogin
 export ZDOTDIR="${paths.ZSH_DIR}"
