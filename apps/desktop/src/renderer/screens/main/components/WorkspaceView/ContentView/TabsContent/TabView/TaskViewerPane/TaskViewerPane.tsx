@@ -176,7 +176,7 @@ export function TaskViewerPane({
 											/>
 										) : (
 											<div className="flex size-4 items-center justify-center rounded-full bg-muted text-[10px]">
-												{task.assignee.name?.charAt(0).toUpperCase()}
+												{task.assignee.name?.charAt(0)?.toUpperCase() ?? "?"}
 											</div>
 										)}
 										<span>{task.assignee.name}</span>
