@@ -5,6 +5,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 } from "node:fs";
@@ -30,17 +31,8 @@ const SUPERVISOR_TOKEN_PATH = join(
 	SUPERSET_HOME_DIR,
 	"terminal-supervisor.token",
 );
-const SUPERVISOR_PID_PATH = join(SUPERSET_HOME_DIR, "terminal-supervisor.pid");
-const WORKER_SOCKET_PATH = join(SUPERSET_HOME_DIR, "terminal-host.sock");
-const WORKER_TOKEN_PATH = join(SUPERSET_HOME_DIR, "terminal-host.token");
-const WORKER_PID_PATH = join(SUPERSET_HOME_DIR, "terminal-host.pid");
 
 const SUPERVISOR_PATH = resolve(__dirname, "index.ts");
-const WORKER_PATH = resolve(__dirname, "../terminal-host/index.ts");
-const XTERM_POLYFILL_PATH = resolve(
-	__dirname,
-	"../terminal-host/xterm-env-polyfill.ts",
-);
 
 const PROCESS_TIMEOUT_MS = 10_000;
 const SOCKET_TIMEOUT_MS = 5_000;
@@ -57,15 +49,40 @@ function cleanupPath(path: string): void {
 }
 
 function cleanupArtifacts(): void {
-	for (const path of [
-		SUPERVISOR_SOCKET_PATH,
-		SUPERVISOR_TOKEN_PATH,
-		SUPERVISOR_PID_PATH,
-		WORKER_SOCKET_PATH,
-		WORKER_TOKEN_PATH,
-		WORKER_PID_PATH,
-	]) {
+	if (!existsSync(SUPERSET_HOME_DIR)) return;
+
+	for (const entry of readdirSync(SUPERSET_HOME_DIR)) {
+		if (
+			!entry.startsWith("terminal-supervisor") &&
+			!entry.startsWith("terminal-worker.") &&
+			!entry.startsWith("terminal-host")
+		) {
+			continue;
+		}
+
+		const path = join(SUPERSET_HOME_DIR, entry);
 		cleanupPath(path);
+	}
+}
+
+function getWorkerSocketPath(generation: string): string {
+	return join(SUPERSET_HOME_DIR, `terminal-worker.${generation}.sock`);
+}
+
+function killRuntimePids(): void {
+	if (!existsSync(SUPERSET_HOME_DIR)) return;
+
+	for (const entry of readdirSync(SUPERSET_HOME_DIR)) {
+		if (!entry.endsWith(".pid")) continue;
+		if (
+			!entry.startsWith("terminal-supervisor") &&
+			!entry.startsWith("terminal-worker.") &&
+			!entry.startsWith("terminal-host")
+		) {
+			continue;
+		}
+
+		killPidFile(join(SUPERSET_HOME_DIR, entry));
 	}
 }
 
@@ -201,6 +218,23 @@ function stopProcess(processHandle: ChildProcess | null): Promise<void> {
 	});
 }
 
+async function waitForCondition(
+	check: () => boolean,
+	label: string,
+	timeoutMs = PROCESS_TIMEOUT_MS,
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (check()) {
+			return;
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+
+	throw new Error(`Timed out waiting for ${label}`);
+}
+
 function createMessageQueue(socket: Socket) {
 	let buffer = "";
 	const queue: Array<IpcResponse | { type: "event"; payload: unknown }> = [];
@@ -266,6 +300,33 @@ function createMessageQueue(socket: Socket) {
 					waiters.push(waiter);
 				},
 			),
+		nextMessageWithin: (timeoutMs: number) =>
+			new Promise<IpcResponse | { type: "event"; payload: unknown } | null>(
+				(resolve) => {
+					const queued = queue.shift();
+					if (queued) {
+						resolve(queued);
+						return;
+					}
+
+					const timeoutId = setTimeout(() => {
+						const index = waiters.indexOf(waiter);
+						if (index >= 0) {
+							waiters.splice(index, 1);
+						}
+						resolve(null);
+					}, timeoutMs);
+
+					const waiter = (
+						message: IpcResponse | { type: "event"; payload: unknown },
+					) => {
+						clearTimeout(timeoutId);
+						resolve(message);
+					};
+
+					waiters.push(waiter);
+				},
+			),
 		dispose: () => {
 			socket.off("data", onData);
 		},
@@ -286,33 +347,10 @@ if (!canRunSupervisorIntegration) {
 	});
 } else {
 	describe("Terminal Supervisor", () => {
-		let workerProcess: ChildProcess | null = null;
 		let supervisorProcess: ChildProcess | null = null;
 
-		beforeAll(async () => {
-			cleanupArtifacts();
-
-			if (!existsSync(SUPERSET_HOME_DIR)) {
-				mkdirSync(SUPERSET_HOME_DIR, { recursive: true, mode: 0o700 });
-			}
-
-			workerProcess = spawn(
-				"bun",
-				["run", "--preload", XTERM_POLYFILL_PATH, WORKER_PATH],
-				{
-					env: {
-						...process.env,
-						HOME: TEST_HOME_DIR,
-						NODE_ENV: "development",
-						SUPERSET_HOME_DIR,
-						SUPERSET_WORKSPACE_NAME: "test-supervisor",
-					},
-					stdio: ["ignore", "pipe", "pipe"],
-				},
-			);
-			await waitForLogLine(workerProcess, "Daemon started", "terminal-host");
-
-			supervisorProcess = spawn("bun", ["run", SUPERVISOR_PATH], {
+		async function startSupervisorProcess(): Promise<ChildProcess> {
+			const processHandle = spawn("bun", ["run", SUPERVISOR_PATH], {
 				env: {
 					...process.env,
 					HOME: TEST_HOME_DIR,
@@ -323,21 +361,29 @@ if (!canRunSupervisorIntegration) {
 				stdio: ["ignore", "pipe", "pipe"],
 			});
 			await waitForLogLine(
-				supervisorProcess,
+				processHandle,
 				"Supervisor started",
 				"terminal-supervisor",
 			);
+			return processHandle;
+		}
+
+		beforeAll(async () => {
+			killRuntimePids();
+			cleanupArtifacts();
+
+			if (!existsSync(SUPERSET_HOME_DIR)) {
+				mkdirSync(SUPERSET_HOME_DIR, { recursive: true, mode: 0o700 });
+			}
+
+			supervisorProcess = await startSupervisorProcess();
 		});
 
 		afterAll(async () => {
 			await stopProcess(supervisorProcess);
 			supervisorProcess = null;
 
-			await stopProcess(workerProcess);
-			workerProcess = null;
-
-			killPidFile(SUPERVISOR_PID_PATH);
-			killPidFile(WORKER_PID_PATH);
+			killRuntimePids();
 			cleanupArtifacts();
 		});
 
@@ -480,6 +526,546 @@ if (!canRunSupervisorIntegration) {
 				streamQueue.dispose();
 				controlSocket.destroy();
 				streamSocket.destroy();
+			}
+		}, 30_000);
+
+		it("routes events only to attached clients and keeps worker attachment until the last detach", async () => {
+			const token = readFileSync(SUPERVISOR_TOKEN_PATH, "utf-8").trim();
+			const clientAControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientAStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientBControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientBStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+
+			const clientAControlQueue = createMessageQueue(clientAControl);
+			const clientAStreamQueue = createMessageQueue(clientAStream);
+			const clientBControlQueue = createMessageQueue(clientBControl);
+			const clientBStreamQueue = createMessageQueue(clientBStream);
+
+			try {
+				for (const [socket, queue, clientId, role] of [
+					[clientAControl, clientAControlQueue, "client-a", "control"] as const,
+					[clientAStream, clientAStreamQueue, "client-a", "stream"] as const,
+					[clientBControl, clientBControlQueue, "client-b", "control"] as const,
+					[clientBStream, clientBStreamQueue, "client-b", "stream"] as const,
+				]) {
+					sendRequest(socket, {
+						id: `hello-${clientId}-${role}`,
+						type: "hello",
+						payload: {
+							token,
+							protocolVersion: PROTOCOL_VERSION,
+							clientId,
+							role,
+						},
+					});
+					const response = (await queue.nextMessage()) as IpcResponse;
+					expect(response.ok).toBe(true);
+				}
+
+				const sharedSessionRequest = {
+					sessionId: "shared-session",
+					cols: 80,
+					rows: 24,
+					cwd: TEST_HOME_DIR,
+					workspaceId: "workspace-shared",
+					paneId: "pane-shared",
+					tabId: "tab-shared",
+				};
+
+				sendRequest(clientAControl, {
+					id: "create-shared-a",
+					type: "createOrAttach",
+					payload: sharedSessionRequest,
+				});
+				expect(
+					((await clientAControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				sendRequest(clientBControl, {
+					id: "create-shared-b",
+					type: "createOrAttach",
+					payload: sharedSessionRequest,
+				});
+				expect(
+					((await clientBControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				sendRequest(clientAControl, {
+					id: "list-shared-2",
+					type: "listSessions",
+					payload: undefined,
+				});
+				const attachedList = (await clientAControlQueue.nextMessage()) as {
+					ok: true;
+					payload: {
+						sessions: Array<{ sessionId: string; attachedClients: number }>;
+					};
+				};
+				expect(attachedList.payload.sessions).toContainEqual(
+					expect.objectContaining({
+						sessionId: "shared-session",
+						attachedClients: 2,
+					}),
+				);
+
+				sendRequest(clientAControl, {
+					id: "detach-shared-a",
+					type: "detach",
+					payload: { sessionId: "shared-session" },
+				});
+				expect(
+					((await clientAControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				sendRequest(clientBControl, {
+					id: "list-shared-1",
+					type: "listSessions",
+					payload: undefined,
+				});
+				const detachedList = (await clientBControlQueue.nextMessage()) as {
+					ok: true;
+					payload: {
+						sessions: Array<{ sessionId: string; attachedClients: number }>;
+					};
+				};
+				expect(detachedList.payload.sessions).toContainEqual(
+					expect.objectContaining({
+						sessionId: "shared-session",
+						attachedClients: 1,
+					}),
+				);
+
+				sendRequest(clientBControl, {
+					id: "kill-shared",
+					type: "kill",
+					payload: { sessionId: "shared-session" },
+				});
+				expect(
+					((await clientBControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				let clientBSawExit = false;
+				const deadline = Date.now() + MESSAGE_TIMEOUT_MS;
+				while (!clientBSawExit && Date.now() < deadline) {
+					const message = await clientBStreamQueue.nextMessage();
+					if (
+						"type" in message &&
+						message.type === "event" &&
+						typeof message.payload === "object" &&
+						message.payload !== null &&
+						"type" in message.payload &&
+						message.payload.type === "exit"
+					) {
+						clientBSawExit = true;
+					}
+				}
+				expect(clientBSawExit).toBe(true);
+
+				const clientAUnexpectedMessage =
+					await clientAStreamQueue.nextMessageWithin(500);
+				expect(clientAUnexpectedMessage).toBeNull();
+			} finally {
+				clientAControlQueue.dispose();
+				clientAStreamQueue.dispose();
+				clientBControlQueue.dispose();
+				clientBStreamQueue.dispose();
+				clientAControl.destroy();
+				clientAStream.destroy();
+				clientBControl.destroy();
+				clientBStream.destroy();
+			}
+		}, 30_000);
+
+		it("keeps existing sessions on the old generation while new sessions move to the preferred worker", async () => {
+			const token = readFileSync(SUPERVISOR_TOKEN_PATH, "utf-8").trim();
+			const genASocketPath = getWorkerSocketPath("gen-a");
+			const genBSocketPath = getWorkerSocketPath("gen-b");
+			const clientAControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientAStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientBControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const clientBStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+
+			const clientAControlQueue = createMessageQueue(clientAControl);
+			const clientAStreamQueue = createMessageQueue(clientAStream);
+			const clientBControlQueue = createMessageQueue(clientBControl);
+			const clientBStreamQueue = createMessageQueue(clientBStream);
+
+			try {
+				for (const [socket, queue, clientId, role, generation] of [
+					[
+						clientAControl,
+						clientAControlQueue,
+						"rollout-client-a",
+						"control",
+						"gen-a",
+					] as const,
+					[
+						clientAStream,
+						clientAStreamQueue,
+						"rollout-client-a",
+						"stream",
+						"gen-a",
+					] as const,
+				]) {
+					sendRequest(socket, {
+						id: `hello-${clientId}-${role}`,
+						type: "hello",
+						payload: {
+							token,
+							protocolVersion: PROTOCOL_VERSION,
+							clientId,
+							role,
+							preferredWorkerGeneration: generation,
+						},
+					});
+					const response = (await queue.nextMessage()) as {
+						ok: true;
+						payload: HelloResponse;
+					};
+					expect(response.ok).toBe(true);
+					expect(response.payload.preferredWorkerGeneration).toBe("gen-a");
+				}
+
+				sendRequest(clientAControl, {
+					id: "create-old-session",
+					type: "createOrAttach",
+					payload: {
+						sessionId: "rollout-old-session",
+						cols: 80,
+						rows: 24,
+						cwd: TEST_HOME_DIR,
+						workspaceId: "workspace-rollout",
+						paneId: "pane-old",
+						tabId: "tab-old",
+					},
+				});
+				const oldSessionResponse =
+					(await clientAControlQueue.nextMessage()) as {
+						ok: true;
+						payload: {
+							workerGeneration?: string;
+						};
+					};
+				expect(oldSessionResponse.ok).toBe(true);
+				expect(oldSessionResponse.payload.workerGeneration).toBe("gen-a");
+				expect(existsSync(genASocketPath)).toBe(true);
+
+				for (const [socket, queue, clientId, role, generation] of [
+					[
+						clientBControl,
+						clientBControlQueue,
+						"rollout-client-b",
+						"control",
+						"gen-b",
+					] as const,
+					[
+						clientBStream,
+						clientBStreamQueue,
+						"rollout-client-b",
+						"stream",
+						"gen-b",
+					] as const,
+				]) {
+					sendRequest(socket, {
+						id: `hello-${clientId}-${role}`,
+						type: "hello",
+						payload: {
+							token,
+							protocolVersion: PROTOCOL_VERSION,
+							clientId,
+							role,
+							preferredWorkerGeneration: generation,
+						},
+					});
+					const response = (await queue.nextMessage()) as {
+						ok: true;
+						payload: HelloResponse;
+					};
+					expect(response.ok).toBe(true);
+					expect(response.payload.preferredWorkerGeneration).toBe("gen-b");
+				}
+				await waitForCondition(
+					() => existsSync(genBSocketPath),
+					"gen-b worker socket to exist",
+				);
+
+				sendRequest(clientBControl, {
+					id: "create-new-session",
+					type: "createOrAttach",
+					payload: {
+						sessionId: "rollout-new-session",
+						cols: 80,
+						rows: 24,
+						cwd: TEST_HOME_DIR,
+						workspaceId: "workspace-rollout",
+						paneId: "pane-new",
+						tabId: "tab-new",
+					},
+				});
+				const newSessionResponse =
+					(await clientBControlQueue.nextMessage()) as {
+						ok: true;
+						payload: {
+							workerGeneration?: string;
+						};
+					};
+				expect(newSessionResponse.ok).toBe(true);
+				expect(newSessionResponse.payload.workerGeneration).toBe("gen-b");
+
+				sendRequest(clientBControl, {
+					id: "list-rollout-sessions",
+					type: "listSessions",
+					payload: undefined,
+				});
+				const listResponse = (await clientBControlQueue.nextMessage()) as {
+					ok: true;
+					payload: {
+						sessions: Array<{
+							sessionId: string;
+							workerGeneration?: string;
+						}>;
+					};
+				};
+				expect(listResponse.ok).toBe(true);
+				expect(listResponse.payload.sessions).toEqual(
+					expect.arrayContaining([
+						expect.objectContaining({
+							sessionId: "rollout-old-session",
+							workerGeneration: "gen-a",
+						}),
+						expect.objectContaining({
+							sessionId: "rollout-new-session",
+							workerGeneration: "gen-b",
+						}),
+					]),
+				);
+
+				sendRequest(clientAControl, {
+					id: "kill-old-session",
+					type: "kill",
+					payload: {
+						sessionId: "rollout-old-session",
+					},
+				});
+				expect(
+					((await clientAControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				let clientASawExit = false;
+				const deadline = Date.now() + MESSAGE_TIMEOUT_MS;
+				while (!clientASawExit && Date.now() < deadline) {
+					const message = await clientAStreamQueue.nextMessage();
+					if (
+						"type" in message &&
+						message.type === "event" &&
+						typeof message.payload === "object" &&
+						message.payload !== null &&
+						"type" in message.payload &&
+						message.payload.type === "exit"
+					) {
+						clientASawExit = true;
+					}
+				}
+				expect(clientASawExit).toBe(true);
+
+				sendRequest(clientAControl, {
+					id: "detach-old-session",
+					type: "detach",
+					payload: { sessionId: "rollout-old-session" },
+				});
+				expect(
+					((await clientAControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+
+				await waitForCondition(
+					() => !existsSync(genASocketPath),
+					"gen-a worker socket to be retired",
+				);
+				expect(existsSync(genBSocketPath)).toBe(true);
+			} finally {
+				clientAControlQueue.dispose();
+				clientAStreamQueue.dispose();
+				clientBControlQueue.dispose();
+				clientBStreamQueue.dispose();
+				clientAControl.destroy();
+				clientAStream.destroy();
+				clientBControl.destroy();
+				clientBStream.destroy();
+			}
+		}, 30_000);
+
+		it("recovers detached worker sessions after the supervisor restarts", async () => {
+			const initialToken = readFileSync(SUPERVISOR_TOKEN_PATH, "utf-8").trim();
+			const workerSocketPath = getWorkerSocketPath("recover-a");
+			const initialControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const initialStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+
+			const initialControlQueue = createMessageQueue(initialControl);
+			const initialStreamQueue = createMessageQueue(initialStream);
+
+			try {
+				for (const [socket, queue, role] of [
+					[initialControl, initialControlQueue, "control"] as const,
+					[initialStream, initialStreamQueue, "stream"] as const,
+				]) {
+					sendRequest(socket, {
+						id: `hello-recovery-initial-${role}`,
+						type: "hello",
+						payload: {
+							token: initialToken,
+							protocolVersion: PROTOCOL_VERSION,
+							clientId: "recovery-initial",
+							role,
+							preferredWorkerGeneration: "recover-a",
+						},
+					});
+					const response = (await queue.nextMessage()) as {
+						ok: true;
+						payload: HelloResponse;
+					};
+					expect(response.ok).toBe(true);
+					expect(response.payload.preferredWorkerGeneration).toBe("recover-a");
+				}
+
+				sendRequest(initialControl, {
+					id: "create-recovery-session",
+					type: "createOrAttach",
+					payload: {
+						sessionId: "recovery-session",
+						cols: 80,
+						rows: 24,
+						cwd: TEST_HOME_DIR,
+						workspaceId: "workspace-recovery",
+						paneId: "pane-recovery",
+						tabId: "tab-recovery",
+					},
+				});
+				const createResponse = (await initialControlQueue.nextMessage()) as {
+					ok: true;
+					payload: {
+						workerGeneration?: string;
+					};
+				};
+				expect(createResponse.ok).toBe(true);
+				expect(createResponse.payload.workerGeneration).toBe("recover-a");
+				await waitForCondition(
+					() => existsSync(workerSocketPath),
+					"recovery worker socket to exist",
+				);
+
+				sendRequest(initialControl, {
+					id: "detach-recovery-session",
+					type: "detach",
+					payload: { sessionId: "recovery-session" },
+				});
+				expect(
+					((await initialControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+			} finally {
+				initialControlQueue.dispose();
+				initialStreamQueue.dispose();
+				initialControl.destroy();
+				initialStream.destroy();
+			}
+
+			await stopProcess(supervisorProcess);
+			supervisorProcess = await startSupervisorProcess();
+
+			const restartedToken = readFileSync(
+				SUPERVISOR_TOKEN_PATH,
+				"utf-8",
+			).trim();
+			const restartedControl = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const restartedStream = await connectToSocket(SUPERVISOR_SOCKET_PATH);
+			const restartedControlQueue = createMessageQueue(restartedControl);
+			const restartedStreamQueue = createMessageQueue(restartedStream);
+
+			try {
+				for (const [socket, queue, role] of [
+					[restartedControl, restartedControlQueue, "control"] as const,
+					[restartedStream, restartedStreamQueue, "stream"] as const,
+				]) {
+					sendRequest(socket, {
+						id: `hello-recovery-restarted-${role}`,
+						type: "hello",
+						payload: {
+							token: restartedToken,
+							protocolVersion: PROTOCOL_VERSION,
+							clientId: "recovery-restarted",
+							role,
+							preferredWorkerGeneration: "recover-b",
+						},
+					});
+					const response = (await queue.nextMessage()) as {
+						ok: true;
+						payload: HelloResponse;
+					};
+					expect(response.ok).toBe(true);
+					expect(response.payload.preferredWorkerGeneration).toBe("recover-b");
+				}
+
+				sendRequest(restartedControl, {
+					id: "list-recovered-sessions",
+					type: "listSessions",
+					payload: undefined,
+				});
+				const listResponse = (await restartedControlQueue.nextMessage()) as {
+					ok: true;
+					payload: {
+						sessions: Array<{
+							sessionId: string;
+							attachedClients: number;
+							workerGeneration?: string;
+						}>;
+					};
+				};
+				expect(listResponse.ok).toBe(true);
+				expect(listResponse.payload.sessions).toContainEqual(
+					expect.objectContaining({
+						sessionId: "recovery-session",
+						attachedClients: 0,
+						workerGeneration: "recover-a",
+					}),
+				);
+
+				sendRequest(restartedControl, {
+					id: "reattach-recovery-session",
+					type: "createOrAttach",
+					payload: {
+						sessionId: "recovery-session",
+						cols: 80,
+						rows: 24,
+						cwd: TEST_HOME_DIR,
+						workspaceId: "workspace-recovery",
+						paneId: "pane-recovery",
+						tabId: "tab-recovery",
+					},
+				});
+				const reattachResponse =
+					(await restartedControlQueue.nextMessage()) as {
+						ok: true;
+						payload: {
+							isNew: boolean;
+							workerGeneration?: string;
+						};
+					};
+				expect(reattachResponse.ok).toBe(true);
+				expect(reattachResponse.payload.isNew).toBe(false);
+				expect(reattachResponse.payload.workerGeneration).toBe("recover-a");
+
+				sendRequest(restartedControl, {
+					id: "kill-recovery-session",
+					type: "kill",
+					payload: { sessionId: "recovery-session" },
+				});
+				expect(
+					((await restartedControlQueue.nextMessage()) as IpcResponse).ok,
+				).toBe(true);
+			} finally {
+				restartedControlQueue.dispose();
+				restartedStreamQueue.dispose();
+				restartedControl.destroy();
+				restartedStream.destroy();
 			}
 		}, 30_000);
 	});

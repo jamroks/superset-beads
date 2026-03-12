@@ -7,18 +7,14 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer, type Server, Socket } from "node:net";
+import { resolve } from "node:path";
 import {
 	ensureSupersetHomeDirExists,
 	SUPERSET_SENSITIVE_FILE_MODE,
 } from "main/lib/app-environment";
-import {
-	resolveDaemonScriptPath,
-	TerminalDaemonClient,
-} from "main/lib/terminal-host/daemon-client";
-import {
-	TERMINAL_HOST_RUNTIME_PATHS,
-	TERMINAL_SUPERVISOR_RUNTIME_PATHS,
-} from "main/lib/terminal-host/runtime-paths";
+import { resolveDaemonScriptPath } from "main/lib/terminal-host/daemon-client";
+import { TERMINAL_SUPERVISOR_RUNTIME_PATHS } from "main/lib/terminal-host/runtime-paths";
+import { version as desktopVersion } from "~/package.json";
 import {
 	type ClearScrollbackRequest,
 	type CreateOrAttachRequest,
@@ -45,8 +41,13 @@ import {
 	SupervisorClientRegistry,
 	type SupervisorClientRole,
 } from "./client-registry";
+import {
+	type DetachedSessionRoute,
+	SupervisorSessionRouting,
+} from "./session-routing";
+import { SupervisorWorkerRegistry } from "./worker-registry";
 
-const SUPERVISOR_VERSION = "1.0.0";
+const SUPERVISOR_VERSION = desktopVersion;
 
 type LogFn = (
 	level: "info" | "warn" | "error",
@@ -119,66 +120,98 @@ function getWorkerScriptPath(): string {
 	});
 }
 
+function getWorkerSpawnArguments(): string[] {
+	if (!process.versions.bun) {
+		return [];
+	}
+
+	const polyfillPath = resolve(
+		__dirname,
+		"../terminal-host/xterm-env-polyfill.ts",
+	);
+	if (!existsSync(polyfillPath)) {
+		return [];
+	}
+
+	return ["run", "--preload", polyfillPath];
+}
+
+function toTerminalErrorCode(
+	code: string | undefined,
+): TerminalErrorEvent["code"] {
+	switch (code) {
+		case "WRITE_QUEUE_FULL":
+		case "SUBPROCESS_ERROR":
+		case "WRITE_FAILED":
+		case "UNKNOWN":
+			return code;
+		default:
+			return undefined;
+	}
+}
+
 export class TerminalSupervisor {
 	private readonly clientRegistry = new SupervisorClientRegistry();
-	private readonly workerClient = new TerminalDaemonClient({
-		daemonName: "terminal-host",
-		daemonScriptPath: getWorkerScriptPath(),
-		runtimePaths: TERMINAL_HOST_RUNTIME_PATHS,
-	});
+	private readonly sessionRouting = new SupervisorSessionRouting();
+	private readonly workerRegistry: SupervisorWorkerRegistry;
 	private server: Server | null = null;
 	private authToken = "";
 	private stopping = false;
 
 	constructor(private readonly log: LogFn) {
-		this.workerClient.on("data", (sessionId, data) => {
-			this.broadcastEvent({
-				type: "event",
-				event: "data",
-				sessionId,
-				payload: { type: "data", data },
-			});
-		});
-
-		this.workerClient.on("exit", (sessionId, exitCode, signal) => {
-			this.broadcastEvent({
-				type: "event",
-				event: "exit",
-				sessionId,
-				payload: {
-					type: "exit",
-					exitCode,
-					signal,
-				} satisfies TerminalExitEvent,
-			});
-		});
-
-		this.workerClient.on("terminalError", (sessionId, error, code) => {
-			this.broadcastEvent({
-				type: "event",
-				event: "error",
-				sessionId,
-				payload: {
-					type: "error",
-					error,
-					code,
-				} satisfies TerminalErrorEvent,
-			});
-		});
-
-		this.workerClient.on("disconnected", () => {
-			if (this.stopping) return;
-			this.log(
-				"warn",
-				"Worker disconnected, closing supervisor client sockets",
-			);
-			this.clientRegistry.destroyAll();
-		});
-
-		this.workerClient.on("error", (error) => {
-			this.log("error", "Worker client error", {
-				error: error.message,
-			});
+		this.workerRegistry = new SupervisorWorkerRegistry({
+			log,
+			workerScriptPath: getWorkerScriptPath(),
+			workerSpawnArguments: getWorkerSpawnArguments(),
+			onData: (_generation, sessionId, data) => {
+				this.forwardEventToAttachedClients({
+					type: "event",
+					event: "data",
+					sessionId,
+					payload: { type: "data", data },
+				});
+			},
+			onExit: (generation, sessionId, exitCode, signal) => {
+				this.forwardEventToAttachedClients({
+					type: "event",
+					event: "exit",
+					sessionId,
+					payload: {
+						type: "exit",
+						exitCode,
+						signal,
+					} satisfies TerminalExitEvent,
+				});
+				this.sessionRouting.markSessionExited(sessionId);
+				void this.reapDrainedWorkers().catch((error) => {
+					this.log("error", "Failed to retire drained workers after exit", {
+						generation,
+						sessionId,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				});
+			},
+			onTerminalError: (_generation, sessionId, error, code) => {
+				this.forwardEventToAttachedClients({
+					type: "event",
+					event: "error",
+					sessionId,
+					payload: {
+						type: "error",
+						error,
+						code: toTerminalErrorCode(code),
+					} satisfies TerminalErrorEvent,
+				});
+			},
+			onDisconnected: (generation) => {
+				this.handleWorkerDisconnected(generation);
+			},
+			onError: (generation, error) => {
+				this.log("error", "Worker client error", {
+					generation,
+					error: error.message,
+				});
+			},
 		});
 	}
 
@@ -212,7 +245,7 @@ export class TerminalSupervisor {
 			this.handleConnection(socket);
 		});
 
-		await new Promise<void>((resolve, reject) => {
+		await new Promise<void>((resolveStart, reject) => {
 			const server = this.server;
 			if (!server) {
 				reject(new Error("Supervisor server was not initialized"));
@@ -247,27 +280,29 @@ export class TerminalSupervisor {
 				this.log("info", "Supervisor started", {
 					socket: TERMINAL_SUPERVISOR_RUNTIME_PATHS.socketPath,
 					pid: process.pid,
-					workerSocket: TERMINAL_HOST_RUNTIME_PATHS.socketPath,
 				});
-				resolve();
+				resolveStart();
 			});
 		});
+
+		await this.recoverExistingWorkerSessions();
 	}
 
 	async stop(): Promise<void> {
 		this.stopping = true;
 		this.clientRegistry.destroyAll();
-		this.workerClient.dispose();
+		this.sessionRouting.clear();
+		this.workerRegistry.clear();
 
-		await new Promise<void>((resolve) => {
+		await new Promise<void>((resolveStop) => {
 			if (!this.server) {
-				resolve();
+				resolveStop();
 				return;
 			}
 
 			this.server.close(() => {
 				this.server = null;
-				resolve();
+				resolveStop();
 			});
 		});
 
@@ -289,9 +324,9 @@ export class TerminalSupervisor {
 		killSessions: boolean;
 	}): Promise<void> {
 		try {
-			await this.workerClient.shutdownIfRunning({ killSessions });
+			await this.workerRegistry.shutdownAllWorkers({ killSessions });
 		} catch (error) {
-			this.log("error", "Failed to shutdown worker during supervisor stop", {
+			this.log("error", "Failed to shutdown workers during supervisor stop", {
 				error: error instanceof Error ? error.message : String(error),
 			});
 		}
@@ -315,35 +350,31 @@ export class TerminalSupervisor {
 	}
 
 	private async isSocketLive(): Promise<boolean> {
-		return new Promise((resolve) => {
+		return new Promise((resolveIsLive) => {
 			if (!existsSync(TERMINAL_SUPERVISOR_RUNTIME_PATHS.socketPath)) {
-				resolve(false);
+				resolveIsLive(false);
 				return;
 			}
 
 			const socket = new Socket();
 			const timeout = setTimeout(() => {
 				socket.destroy();
-				resolve(false);
+				resolveIsLive(false);
 			}, 1000);
 
 			socket.on("connect", () => {
 				clearTimeout(timeout);
 				socket.destroy();
-				resolve(true);
+				resolveIsLive(true);
 			});
 
 			socket.on("error", () => {
 				clearTimeout(timeout);
-				resolve(false);
+				resolveIsLive(false);
 			});
 
 			socket.connect(TERMINAL_SUPERVISOR_RUNTIME_PATHS.socketPath);
 		});
-	}
-
-	private async ensureWorkerConnected(): Promise<void> {
-		await this.workerClient.ensureConnected();
 	}
 
 	private requireControlRole(
@@ -369,10 +400,140 @@ export class TerminalSupervisor {
 		return true;
 	}
 
-	private broadcastEvent(event: IpcEvent): void {
+	private resolveRequestedGeneration(request: HelloRequest): string {
+		const preferredGeneration = request.preferredWorkerGeneration?.trim();
+		if (preferredGeneration) {
+			return preferredGeneration;
+		}
+
+		const appVersion = request.appVersion?.trim();
+		if (appVersion) {
+			return appVersion;
+		}
+
+		return desktopVersion;
+	}
+
+	private async ensurePreferredWorkerGeneration(
+		generation: string,
+	): Promise<string> {
+		const requestedGeneration = generation.trim() || desktopVersion;
+		try {
+			await this.workerRegistry.ensurePreferredWorkerGeneration(
+				requestedGeneration,
+			);
+		} catch (error) {
+			const fallbackGeneration =
+				this.workerRegistry.getFallbackGeneration(requestedGeneration);
+			if (!fallbackGeneration) {
+				throw error;
+			}
+
+			this.log(
+				"warn",
+				"Failed to promote requested worker generation; keeping existing worker",
+				{
+					requestedGeneration,
+					fallbackGeneration,
+					error: error instanceof Error ? error.message : String(error),
+				},
+			);
+			return fallbackGeneration;
+		}
+
+		await this.reapDrainedWorkers();
+		return requestedGeneration;
+	}
+
+	private async getPreferredWorkerGeneration(): Promise<string> {
+		const preferredGeneration = this.workerRegistry.getPreferredGeneration();
+		if (preferredGeneration) {
+			return preferredGeneration;
+		}
+
+		const fallbackGeneration = this.workerRegistry.getFallbackGeneration();
+		if (fallbackGeneration) {
+			return fallbackGeneration;
+		}
+
+		return this.ensurePreferredWorkerGeneration(desktopVersion);
+	}
+
+	private async recoverExistingWorkerSessions(): Promise<void> {
+		try {
+			const recoveredWorkers =
+				await this.workerRegistry.discoverExistingWorkers();
+			if (recoveredWorkers.length === 0) {
+				return;
+			}
+
+			let recoveredSessions = 0;
+			for (const worker of recoveredWorkers) {
+				for (const session of worker.sessions) {
+					if (!session.isAlive) {
+						continue;
+					}
+
+					this.sessionRouting.restoreSession({
+						sessionId: session.sessionId,
+						workerId: worker.generation,
+					});
+					recoveredSessions += 1;
+				}
+			}
+
+			this.log("info", "Recovered existing terminal workers", {
+				workers: recoveredWorkers.map((worker) => ({
+					generation: worker.generation,
+					liveSessions: worker.sessions.filter((session) => session.isAlive)
+						.length,
+				})),
+				recoveredSessions,
+			});
+		} catch (error) {
+			this.log("warn", "Failed to recover existing terminal workers", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
+	private async getWorkerGenerationForCreateOrAttach(
+		sessionId: string,
+	): Promise<string> {
+		const existingGeneration = this.sessionRouting.getWorkerId(sessionId);
+		if (existingGeneration) {
+			return existingGeneration;
+		}
+
+		return this.getPreferredWorkerGeneration();
+	}
+
+	private requireSessionWorkerGeneration(
+		socket: Socket,
+		id: string,
+		sessionId: string,
+	): string | null {
+		const generation = this.sessionRouting.getWorkerId(sessionId);
+		if (generation) {
+			return generation;
+		}
+
+		sendError(
+			socket,
+			id,
+			"SESSION_NOT_FOUND",
+			`No routed session found for ${sessionId}`,
+		);
+		return null;
+	}
+
+	private forwardEventToClientIds(event: IpcEvent, clientIds: string[]): void {
 		const message = `${JSON.stringify(event)}\n`;
 
-		for (const streamSocket of this.clientRegistry.getAllStreamSockets()) {
+		for (const clientId of clientIds) {
+			const streamSocket = this.clientRegistry.getStreamSocket(clientId);
+			if (!streamSocket) continue;
+
 			try {
 				streamSocket.write(message);
 			} catch {
@@ -385,9 +546,83 @@ export class TerminalSupervisor {
 		}
 	}
 
-	private async proxyRequest<T>(proxy: () => Promise<T>): Promise<T> {
-		await this.ensureWorkerConnected();
-		return proxy();
+	private forwardEventToAttachedClients(event: IpcEvent): void {
+		this.forwardEventToClientIds(
+			event,
+			this.sessionRouting.getAttachedClientIds(event.sessionId),
+		);
+	}
+
+	private async detachWorkerSessionIfNeeded(
+		detachedRoute: DetachedSessionRoute,
+	): Promise<void> {
+		if (!detachedRoute.shouldDetachWorker) {
+			return;
+		}
+		if (detachedRoute.wasExited) {
+			await this.reapDrainedWorkers();
+			return;
+		}
+
+		const worker = this.workerRegistry.getWorker(detachedRoute.workerId);
+		if (!worker) {
+			return;
+		}
+
+		await worker.client.detach({
+			sessionId: detachedRoute.sessionId,
+		} satisfies DetachRequest);
+		await this.reapDrainedWorkers();
+	}
+
+	private async listWorkerSessions(): Promise<ListSessionsResponse> {
+		const workerSessions = await this.workerRegistry.listWorkerSessions();
+
+		return {
+			sessions: workerSessions.flatMap(({ generation, sessions }) =>
+				sessions.map((session) => ({
+					...session,
+					attachedClients: this.sessionRouting.getAttachedClientCount(
+						session.sessionId,
+					),
+					workerGeneration: generation,
+				})),
+			),
+		};
+	}
+
+	private async reapDrainedWorkers(): Promise<void> {
+		await this.workerRegistry.shutdownDrainedWorkers({
+			hasRoutedSessions: (generation) =>
+				this.sessionRouting.hasRoutedSessions(generation),
+		});
+	}
+
+	private handleWorkerDisconnected(generation: string): void {
+		if (this.stopping) return;
+
+		const clearedRoutes = this.sessionRouting.clearWorkerRoutes(generation);
+		this.workerRegistry.removeWorker(generation);
+
+		this.log("warn", "Worker disconnected", {
+			generation,
+			affectedSessions: clearedRoutes.map((route) => route.sessionId),
+		});
+
+		for (const route of clearedRoutes) {
+			this.forwardEventToClientIds(
+				{
+					type: "event",
+					event: "exit",
+					sessionId: route.sessionId,
+					payload: {
+						type: "exit",
+						exitCode: 1,
+					} satisfies TerminalExitEvent,
+				},
+				route.clientIds,
+			);
+		}
 	}
 
 	private async handleHello(
@@ -441,10 +676,16 @@ export class TerminalSupervisor {
 			}
 		}
 
+		const preferredWorkerGeneration =
+			await this.ensurePreferredWorkerGeneration(
+				this.resolveRequestedGeneration(request),
+			);
+
 		const response: HelloResponse = {
 			protocolVersion: PROTOCOL_VERSION,
 			daemonVersion: SUPERVISOR_VERSION,
 			daemonPid: process.pid,
+			preferredWorkerGeneration,
 		};
 
 		sendSuccess(socket, id, response);
@@ -474,10 +715,23 @@ export class TerminalSupervisor {
 					return;
 				}
 
-				const response = await this.proxyRequest(() =>
-					this.workerClient.createOrAttach(payload as CreateOrAttachRequest),
+				const createOrAttachRequest = payload as CreateOrAttachRequest;
+				const generation = await this.getWorkerGenerationForCreateOrAttach(
+					createOrAttachRequest.sessionId,
 				);
-				sendSuccess(socket, id, response);
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.createOrAttach(createOrAttachRequest),
+				);
+				this.sessionRouting.attachSession({
+					sessionId: createOrAttachRequest.sessionId,
+					workerId: generation,
+					clientId: clientState.clientId,
+				});
+				sendSuccess(socket, id, {
+					...response,
+					workerGeneration: generation,
+				});
 				return;
 			}
 
@@ -486,13 +740,39 @@ export class TerminalSupervisor {
 				const writeRequest = payload as WriteRequest;
 
 				if (id.startsWith("notify_")) {
-					await this.ensureWorkerConnected();
-					this.workerClient.writeNoAck(writeRequest);
+					const generation = this.sessionRouting.getWorkerId(
+						writeRequest.sessionId,
+					);
+					if (!generation) {
+						this.log("warn", "Dropping notify write for unknown session", {
+							sessionId: writeRequest.sessionId,
+						});
+						return;
+					}
+
+					const worker = this.workerRegistry.getWorker(generation);
+					if (!worker) {
+						this.log("warn", "Dropping notify write for missing worker", {
+							sessionId: writeRequest.sessionId,
+							generation,
+						});
+						return;
+					}
+
+					worker.client.writeNoAck(writeRequest);
 					return;
 				}
 
-				const response = await this.proxyRequest(() =>
-					this.workerClient.write(writeRequest),
+				const generation = this.requireSessionWorkerGeneration(
+					socket,
+					id,
+					writeRequest.sessionId,
+				);
+				if (!generation) return;
+
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.write(writeRequest),
 				);
 				sendSuccess(socket, id, response satisfies EmptyResponse);
 				return;
@@ -500,8 +780,17 @@ export class TerminalSupervisor {
 
 			case "resize": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.resize(payload as ResizeRequest),
+				const resizeRequest = payload as ResizeRequest;
+				const generation = this.requireSessionWorkerGeneration(
+					socket,
+					id,
+					resizeRequest.sessionId,
+				);
+				if (!generation) return;
+
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.resize(resizeRequest),
 				);
 				sendSuccess(socket, id, response satisfies EmptyResponse);
 				return;
@@ -509,27 +798,33 @@ export class TerminalSupervisor {
 
 			case "detach": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				if (!this.clientRegistry.getStreamSocket(clientState.clientId)) {
-					sendError(
-						socket,
-						id,
-						"STREAM_NOT_CONNECTED",
-						"Stream socket not connected",
-					);
-					return;
+				const detachRequest = payload as DetachRequest;
+				const detachedRoute = this.sessionRouting.detachSession({
+					sessionId: detachRequest.sessionId,
+					clientId: clientState.clientId,
+				});
+
+				if (detachedRoute) {
+					await this.detachWorkerSessionIfNeeded(detachedRoute);
 				}
 
-				const response = await this.proxyRequest(() =>
-					this.workerClient.detach(payload as DetachRequest),
-				);
-				sendSuccess(socket, id, response satisfies EmptyResponse);
+				sendSuccess(socket, id, { success: true } satisfies EmptyResponse);
 				return;
 			}
 
 			case "signal": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.signal(payload as SignalRequest),
+				const signalRequest = payload as SignalRequest;
+				const generation = this.requireSessionWorkerGeneration(
+					socket,
+					id,
+					signalRequest.sessionId,
+				);
+				if (!generation) return;
+
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.signal(signalRequest),
 				);
 				sendSuccess(socket, id, response satisfies EmptyResponse);
 				return;
@@ -537,8 +832,17 @@ export class TerminalSupervisor {
 
 			case "kill": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.kill(payload as KillRequest),
+				const killRequest = payload as KillRequest;
+				const generation = this.requireSessionWorkerGeneration(
+					socket,
+					id,
+					killRequest.sessionId,
+				);
+				if (!generation) return;
+
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.kill(killRequest),
 				);
 				sendSuccess(socket, id, response satisfies EmptyResponse);
 				return;
@@ -546,26 +850,37 @@ export class TerminalSupervisor {
 
 			case "killAll": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.killAll(payload as KillAllRequest),
+				const killAllRequest = payload as KillAllRequest;
+
+				await Promise.all(
+					this.workerRegistry
+						.listWorkers()
+						.map((worker) => worker.client.killAll(killAllRequest)),
 				);
-				sendSuccess(socket, id, response satisfies EmptyResponse);
+				sendSuccess(socket, id, { success: true } satisfies EmptyResponse);
 				return;
 			}
 
 			case "listSessions": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.listSessions(),
-				);
+				const response = await this.listWorkerSessions();
 				sendSuccess(socket, id, response satisfies ListSessionsResponse);
 				return;
 			}
 
 			case "clearScrollback": {
 				if (!this.requireControlRole(socket, id, clientState, type)) return;
-				const response = await this.proxyRequest(() =>
-					this.workerClient.clearScrollback(payload as ClearScrollbackRequest),
+				const clearScrollbackRequest = payload as ClearScrollbackRequest;
+				const generation = this.requireSessionWorkerGeneration(
+					socket,
+					id,
+					clearScrollbackRequest.sessionId,
+				);
+				if (!generation) return;
+
+				const response = await this.workerRegistry.withWorker(
+					generation,
+					(worker) => worker.client.clearScrollback(clearScrollbackRequest),
 				);
 				sendSuccess(socket, id, response satisfies EmptyResponse);
 				return;
@@ -634,6 +949,31 @@ export class TerminalSupervisor {
 					role: clientState.role,
 					socket,
 				});
+
+				if (this.clientRegistry.hasClient(clientState.clientId)) {
+					return;
+				}
+
+				const detachedRoutes = this.sessionRouting.detachClient(
+					clientState.clientId,
+				);
+				for (const detachedRoute of detachedRoutes) {
+					if (!detachedRoute.shouldDetachWorker) continue;
+
+					void this.detachWorkerSessionIfNeeded(detachedRoute).catch(
+						(error) => {
+							this.log(
+								"error",
+								"Failed to detach worker session on disconnect",
+								{
+									sessionId: detachedRoute.sessionId,
+									workerId: detachedRoute.workerId,
+									error: error instanceof Error ? error.message : String(error),
+								},
+							);
+						},
+					);
+				}
 			}
 		};
 

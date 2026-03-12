@@ -1,3 +1,4 @@
+import { version } from "~/package.json";
 import {
 	resolveDaemonScriptPath,
 	TerminalDaemonClient,
@@ -23,6 +24,10 @@ export function getTerminalHostClient(): TerminalHostClient {
 		clientInstance = new TerminalDaemonClient({
 			daemonName: "terminal-supervisor",
 			daemonScriptPath: getTerminalSupervisorScriptPath(),
+			helloMetadata: {
+				appVersion: version,
+				preferredWorkerGeneration: version,
+			},
 			runtimePaths: TERMINAL_SUPERVISOR_RUNTIME_PATHS,
 		});
 	}

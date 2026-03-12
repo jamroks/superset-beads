@@ -35,16 +35,8 @@ export class SupervisorClientRegistry {
 		return this.clientsById.get(clientId)?.stream;
 	}
 
-	getAllStreamSockets(): Socket[] {
-		const sockets: Socket[] = [];
-
-		for (const clientSockets of this.clientsById.values()) {
-			if (clientSockets.stream) {
-				sockets.push(clientSockets.stream);
-			}
-		}
-
-		return sockets;
+	hasClient(clientId: string): boolean {
+		return this.clientsById.has(clientId);
 	}
 
 	removeSocket({

@@ -33,6 +33,7 @@ import {
 	type CreateOrAttachResponse,
 	type DetachRequest,
 	type EmptyResponse,
+	type HelloRequest,
 	type HelloResponse,
 	type IpcEvent,
 	type IpcResponse,
@@ -148,6 +149,12 @@ export interface TerminalDaemonClientOptions {
 	daemonScriptPath: string;
 	runtimePaths: TerminalDaemonRuntimePaths;
 	supportsLegacyProtocolDowngrade?: boolean;
+	helloMetadata?: Pick<
+		HelloRequest,
+		"appVersion" | "preferredWorkerGeneration"
+	>;
+	spawnArguments?: string[];
+	spawnEnv?: Record<string, string | undefined>;
 }
 
 export interface ResolveDaemonScriptPathOptions {
@@ -193,12 +200,21 @@ export class TerminalDaemonClient extends EventEmitter {
 	private readonly daemonScriptPath: string;
 	private readonly runtimePaths: TerminalDaemonRuntimePaths;
 	private readonly supportsLegacyProtocolDowngrade: boolean;
+	private readonly helloMetadata: Pick<
+		HelloRequest,
+		"appVersion" | "preferredWorkerGeneration"
+	>;
+	private readonly spawnArguments: string[];
+	private readonly spawnEnv: Record<string, string | undefined>;
 
 	constructor({
 		daemonName,
 		daemonScriptPath,
 		runtimePaths,
 		supportsLegacyProtocolDowngrade = false,
+		helloMetadata = {},
+		spawnArguments = [],
+		spawnEnv = {},
 	}: TerminalDaemonClientOptions) {
 		super();
 
@@ -206,12 +222,17 @@ export class TerminalDaemonClient extends EventEmitter {
 		this.daemonScriptPath = daemonScriptPath;
 		this.runtimePaths = runtimePaths;
 		this.supportsLegacyProtocolDowngrade = supportsLegacyProtocolDowngrade;
+		this.helloMetadata = helloMetadata;
+		this.spawnArguments = spawnArguments;
+		this.spawnEnv = spawnEnv;
 
 		if (DEBUG_CLIENT) {
 			console.log(`[TerminalDaemonClient:${this.daemonName}] Initialized`, {
 				SUPERSET_HOME_DIR,
 				runtimePaths,
 				daemonScriptPath,
+				helloMetadata,
+				spawnArguments,
 				NODE_ENV: process.env.NODE_ENV,
 			});
 		}
@@ -735,6 +756,7 @@ export class TerminalDaemonClient extends EventEmitter {
 			protocolVersion: PROTOCOL_VERSION,
 			clientId: this.clientId,
 			role: "control",
+			...this.helloMetadata,
 		});
 
 		if (response.protocolVersion !== PROTOCOL_VERSION) {
@@ -758,6 +780,7 @@ export class TerminalDaemonClient extends EventEmitter {
 				protocolVersion: PROTOCOL_VERSION,
 				clientId: this.clientId,
 				role: "stream",
+				...this.helloMetadata,
 			},
 		});
 
@@ -1126,15 +1149,20 @@ export class TerminalDaemonClient extends EventEmitter {
 			// Spawn daemon as detached process
 			let child: ReturnType<typeof spawn> | null = null;
 			try {
-				child = spawn(process.execPath, [daemonScript], {
-					detached: true,
-					stdio: logFd >= 0 ? ["ignore", logFd, logFd] : "ignore",
-					env: {
-						...process.env,
-						ELECTRON_RUN_AS_NODE: "1",
-						NODE_ENV: process.env.NODE_ENV,
+				child = spawn(
+					process.execPath,
+					[...this.spawnArguments, daemonScript],
+					{
+						detached: true,
+						stdio: logFd >= 0 ? ["ignore", logFd, logFd] : "ignore",
+						env: {
+							...process.env,
+							ELECTRON_RUN_AS_NODE: "1",
+							NODE_ENV: process.env.NODE_ENV,
+							...this.spawnEnv,
+						},
 					},
-				});
+				);
 			} finally {
 				if (logFd >= 0) {
 					try {
@@ -1426,6 +1454,15 @@ export class TerminalDaemonClient extends EventEmitter {
 	async shutdownIfRunning(
 		request: ShutdownRequest = {},
 	): Promise<{ wasRunning: boolean }> {
+		if (this.controlSocket && this.controlAuthenticated) {
+			try {
+				await this.sendRequest<EmptyResponse>("shutdown", request);
+				return { wasRunning: true };
+			} finally {
+				this.disconnect();
+			}
+		}
+
 		// Avoid spawning a daemon if none exists.
 		const connected = await this.tryConnectControl();
 		if (!connected) return { wasRunning: false };
