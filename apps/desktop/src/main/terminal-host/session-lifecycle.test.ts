@@ -121,6 +121,8 @@ if (!canRunSessionLifecycleIntegration) {
 							HOME: TEST_HOME_DIR,
 							NODE_ENV: "development",
 							SUPERSET_WORKSPACE_NAME: "test",
+							// Use sh to skip shell-ready wait (no marker wrappers in test HOME)
+							SHELL: "/bin/sh",
 						},
 						stdio: ["ignore", "pipe", "pipe"],
 						detached: true,
