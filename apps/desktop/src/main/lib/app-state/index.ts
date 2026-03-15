@@ -30,6 +30,10 @@ function ensureValidShape(data: Partial<AppState>): AppState {
 				...(data.hotkeysState?.byPlatform ?? {}),
 			},
 		},
+		onboardingState: {
+			...defaultAppState.onboardingState,
+			...(data.onboardingState ?? {}),
+		},
 	};
 }
 

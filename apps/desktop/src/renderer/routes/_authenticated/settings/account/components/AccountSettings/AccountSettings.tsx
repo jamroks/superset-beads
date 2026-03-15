@@ -4,6 +4,7 @@ import { Card, CardContent } from "@superset/ui/card";
 import { Input } from "@superset/ui/input";
 import { toast } from "@superset/ui/sonner";
 import { useLiveQuery } from "@tanstack/react-db";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { HiOutlinePencil } from "react-icons/hi2";
 import { apiTrpcClient } from "renderer/lib/api-trpc-client";
@@ -30,11 +31,16 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 		SETTING_ITEM_ID.ACCOUNT_SIGNOUT,
 		visibleItems,
 	);
+	const showRestartOnboarding = isItemVisible(
+		SETTING_ITEM_ID.ACCOUNT_RESTART_ONBOARDING,
+		visibleItems,
+	);
 
 	const { data: session } = authClient.useSession();
 	const currentUserId = session?.user?.id;
 	const collections = useCollections();
 
+	const navigate = useNavigate();
 	const [nameValue, setNameValue] = useState("");
 	const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
@@ -48,6 +54,13 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 	const signOutMutation = electronTrpc.auth.signOut.useMutation({
 		onSuccess: () => toast.success("Signed out"),
 	});
+
+	const resetOnboardingMutation =
+		electronTrpc.uiState.onboarding.reset.useMutation({
+			onSuccess: () => {
+				navigate({ to: "/connect-provider" });
+			},
+		});
 
 	const selectImageMutation = electronTrpc.window.selectImageFile.useMutation();
 
@@ -187,6 +200,22 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 						</p>
 						<Button variant="outline" onClick={() => signOutMutation.mutate()}>
 							Sign Out
+						</Button>
+					</div>
+				)}
+
+				{showRestartOnboarding && (
+					<div className={showProfile || showSignOut ? "pt-6 border-t" : ""}>
+						<h3 className="text-sm font-medium mb-2">Onboarding</h3>
+						<p className="text-sm text-muted-foreground mb-4">
+							Restart the setup wizard to reconfigure your AI provider.
+						</p>
+						<Button
+							variant="outline"
+							onClick={() => resetOnboardingMutation.mutate()}
+							disabled={resetOnboardingMutation.isPending}
+						>
+							Restart Onboarding
 						</Button>
 					</div>
 				)}

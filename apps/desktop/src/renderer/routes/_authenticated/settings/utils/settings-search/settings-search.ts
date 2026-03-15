@@ -3,6 +3,7 @@ import type { SettingsSection } from "renderer/stores/settings-state";
 export const SETTING_ITEM_ID = {
 	ACCOUNT_PROFILE: "account-profile",
 	ACCOUNT_SIGNOUT: "account-signout",
+	ACCOUNT_RESTART_ONBOARDING: "account-restart-onboarding",
 
 	ORGANIZATION_LOGO: "organization-logo",
 	ORGANIZATION_NAME: "organization-name",
@@ -105,6 +106,22 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"log out",
 			"disconnect",
 			"leave",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.ACCOUNT_RESTART_ONBOARDING,
+		section: "account",
+		title: "Restart Onboarding",
+		description: "Restart the setup wizard to reconfigure your AI provider",
+		keywords: [
+			"account",
+			"onboarding",
+			"restart",
+			"setup",
+			"wizard",
+			"provider",
+			"connect",
+			"reconfigure",
 		],
 	},
 	{

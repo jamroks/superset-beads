@@ -13,21 +13,22 @@ export function DesktopRedirect({
 }) {
 	useEffect(() => {
 		if (localCallbackUrl) {
-			// Full-page redirect to localhost — not blocked by mixed content.
-			// Browsers only block mixed-content subresources (fetch, XHR), not navigations.
 			window.location.href = localCallbackUrl;
 		} else {
-			// Fallback to deep link (macOS, or when local server unavailable)
 			window.location.href = url;
 		}
 	}, [url, localCallbackUrl]);
 
 	return (
-		<div className="flex flex-col items-center gap-6">
-			<Image src="/title.svg" alt="Superset" width={280} height={86} priority />
-			<p className="text-xl text-muted-foreground">
-				Redirecting to desktop app...
-			</p>
+		<div className="flex flex-col items-center gap-8">
+			<Image src="/title.svg" alt="Superset" width={180} height={56} priority />
+
+			<div className="flex flex-col items-center gap-3">
+				<div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
+				<h1 className="text-xl font-semibold">You're all set!</h1>
+				<p className="text-sm text-muted-foreground">Opening Superset...</p>
+			</div>
+
 			<Link
 				href={localCallbackUrl ?? url}
 				className="text-sm text-muted-foreground/70 underline decoration-muted-foreground/40 underline-offset-4 transition-colors hover:text-muted-foreground"

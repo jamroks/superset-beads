@@ -1,6 +1,11 @@
 import { observable } from "@trpc/server/observable";
 import { appState } from "main/lib/app-state";
-import type { TabsState, ThemeState } from "main/lib/app-state/schemas";
+import type {
+	OnboardingState,
+	TabsState,
+	ThemeState,
+} from "main/lib/app-state/schemas";
+import { defaultAppState } from "main/lib/app-state/schemas";
 import { hotkeysEmitter } from "main/lib/hotkeys-events";
 import {
 	buildOverridesFromBindings,
@@ -234,6 +239,12 @@ const themeStateSchema = z.object({
 	customThemes: z.array(themeSchema),
 });
 
+const onboardingStateSchema = z.object({
+	providerOnboardingCompleted: z.boolean(),
+	selectedProvider: z.enum(["claude-code", "codex"]).nullable(),
+	selectedAuthMethod: z.enum(["oauth", "api-key"]).nullable(),
+});
+
 const hotkeysStateSchema = z.object({
 	version: z.number(),
 	byPlatform: z.object({
@@ -276,6 +287,28 @@ export const createUiStateRouter = () => {
 					await appState.write();
 					return { success: true };
 				}),
+		}),
+
+		// Onboarding state procedures
+		onboarding: router({
+			get: publicProcedure.query((): OnboardingState => {
+				return appState.data.onboardingState;
+			}),
+			set: publicProcedure
+				.input(onboardingStateSchema.partial())
+				.mutation(async ({ input }) => {
+					appState.data.onboardingState = {
+						...appState.data.onboardingState,
+						...input,
+					};
+					await appState.write();
+					return { success: true };
+				}),
+			reset: publicProcedure.mutation(async () => {
+				appState.data.onboardingState = defaultAppState.onboardingState;
+				await appState.write();
+				return { success: true };
+			}),
 		}),
 
 		// Hotkeys state procedures

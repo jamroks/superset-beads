@@ -13,10 +13,17 @@ export interface ThemeState {
 	customThemes: Theme[];
 }
 
+export interface OnboardingState {
+	providerOnboardingCompleted: boolean;
+	selectedProvider: "claude-code" | "codex" | null;
+	selectedAuthMethod: "oauth" | "api-key" | null;
+}
+
 export interface AppState {
 	tabsState: BaseTabsState;
 	themeState: ThemeState;
 	hotkeysState: HotkeysState;
+	onboardingState: OnboardingState;
 }
 
 export const defaultAppState: AppState = {
@@ -32,4 +39,9 @@ export const defaultAppState: AppState = {
 		customThemes: [],
 	},
 	hotkeysState: createDefaultHotkeysState(),
+	onboardingState: {
+		providerOnboardingCompleted: false,
+		selectedProvider: null,
+		selectedAuthMethod: null,
+	},
 };

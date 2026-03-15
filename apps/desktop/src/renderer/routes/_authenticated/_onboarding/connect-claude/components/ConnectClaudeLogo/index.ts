@@ -1,0 +1,1 @@
+export { ConnectClaudeLogo } from "./ConnectClaudeLogo";
