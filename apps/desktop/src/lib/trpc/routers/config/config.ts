@@ -450,6 +450,7 @@ export const createConfigRouter = () => {
 					projectId: z.string(),
 					setup: z.array(z.string()),
 					teardown: z.array(z.string()),
+					run: z.array(z.string()).optional(),
 				}),
 			)
 			.mutation(({ input }) => {
@@ -482,6 +483,7 @@ export const createConfigRouter = () => {
 					...existingConfig,
 					setup: input.setup,
 					teardown: input.teardown,
+					...(input.run !== undefined && { run: input.run }),
 				};
 
 				try {

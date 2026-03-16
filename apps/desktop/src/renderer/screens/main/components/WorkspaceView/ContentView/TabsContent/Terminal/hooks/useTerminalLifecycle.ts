@@ -3,6 +3,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import type { IDisposable, ITheme, Terminal as XTerm } from "@xterm/xterm";
 import type { MutableRefObject, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { killTerminalForPane } from "renderer/stores/tabs/utils/terminal-cleanup";
 import { scheduleTerminalAttach } from "../attach-scheduler";
@@ -132,11 +133,15 @@ export interface UseTerminalLifecycleOptions {
 		(paneId: string, callback: (text: string) => void) => void
 	>;
 	unregisterPasteCallbackRef: MutableRefObject<UnregisterCallback>;
+	defaultRestartCommandRef: MutableRefObject<string | undefined>;
 }
 
 export interface UseTerminalLifecycleReturn {
 	xtermInstance: XTerm | null;
-	restartTerminal: () => void;
+	restartTerminal: (options?: {
+		command?: string;
+		forceRestart?: boolean;
+	}) => Promise<void>;
 }
 
 export function useTerminalLifecycle({
@@ -188,10 +193,17 @@ export function useTerminalLifecycle({
 	unregisterGetSelectionCallbackRef,
 	registerPasteCallbackRef,
 	unregisterPasteCallbackRef,
+	defaultRestartCommandRef,
 }: UseTerminalLifecycleOptions): UseTerminalLifecycleReturn {
 	const [xtermInstance, setXtermInstance] = useState<XTerm | null>(null);
-	const restartTerminalRef = useRef<() => void>(() => {});
-	const restartTerminal = useCallback(() => restartTerminalRef.current(), []);
+	const restartTerminalRef = useRef<
+		(options?: { command?: string; forceRestart?: boolean }) => Promise<void>
+	>(() => Promise.resolve());
+	const restartTerminal = useCallback(
+		(options?: { command?: string; forceRestart?: boolean }) =>
+			restartTerminalRef.current(options),
+		[],
+	);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: refs used intentionally
 	useEffect(() => {
@@ -275,44 +287,97 @@ export function useTerminalLifecycle({
 			maybeApplyInitialState();
 		}, FIRST_RENDER_RESTORE_FALLBACK_MS);
 
-		const restartTerminalSession = () => {
-			isExitedRef.current = false;
-			isStreamReadyRef.current = false;
-			wasKilledByUserRef.current = false;
-			setExitStatus(null);
-			resetModes();
-			xterm.clear();
-			createOrAttachRef.current(
-				{
-					paneId,
-					tabId: tabIdRef.current,
-					workspaceId,
-					cols: xterm.cols,
-					rows: xterm.rows,
-					allowKilled: true,
-				},
-				{
-					onSuccess: (result) => {
-						pendingInitialStateRef.current = result;
-						maybeApplyInitialState();
-					},
-					onError: (error) => {
-						console.error("[Terminal] Failed to restart:", error);
-						setConnectionError(error.message || "Failed to restart terminal");
-						isStreamReadyRef.current = true;
-						flushPendingEvents();
-					},
-				},
-			);
-		};
+		const restartTerminalSession = (options?: {
+			command?: string;
+			forceRestart?: boolean;
+		}) =>
+			new Promise<void>((resolve, reject) => {
+				const command = options?.command ?? defaultRestartCommandRef.current;
+				const workspaceRun =
+					useTabsStore.getState().panes[paneId]?.workspaceRun;
+				isExitedRef.current = false;
+				isStreamReadyRef.current = false;
+				wasKilledByUserRef.current = false;
+				setExitStatus(null);
+				resetModes();
+				xterm.clear();
+				if (workspaceRun && command) {
+					useTabsStore.getState().setPaneWorkspaceRun(paneId, {
+						workspaceId: workspaceRun.workspaceId,
+						state: "running",
+					});
+				}
+				const attach = () => {
+					createOrAttachRef.current(
+						{
+							paneId,
+							tabId: tabIdRef.current,
+							workspaceId,
+							cols: xterm.cols,
+							rows: xterm.rows,
+							skipColdRestore: true,
+							allowKilled: true,
+							command,
+						},
+						{
+							onSuccess: (result) => {
+								setConnectionError(null);
+								pendingInitialStateRef.current = result;
+								maybeApplyInitialState();
+								resolve();
+							},
+							onError: (error) => {
+								console.error("[Terminal] Failed to restart:", error);
+								if (workspaceRun) {
+									useTabsStore.getState().setPaneWorkspaceRun(paneId, {
+										workspaceId: workspaceRun.workspaceId,
+										state: "stopped-by-exit",
+									});
+								}
+								setConnectionError(
+									error.message || "Failed to restart terminal",
+								);
+								isStreamReadyRef.current = true;
+								flushPendingEvents();
+								reject(error);
+							},
+						},
+					);
+				};
+
+				if (options?.forceRestart) {
+					void electronTrpcClient.terminal.kill
+						.mutate({ paneId })
+						.catch((err) => {
+							console.warn("[Terminal] Kill failed before restart:", err);
+						})
+						.finally(attach);
+					return;
+				}
+				attach();
+			});
 
 		restartTerminalRef.current = restartTerminalSession;
 
 		const handleTerminalInput = (data: string) => {
 			if (isRestoredModeRef.current || connectionErrorRef.current) return;
 			if (isExitedRef.current) {
-				if (!isFocusedRef.current || wasKilledByUserRef.current) return;
-				restartTerminalSession();
+				const isWorkspaceRunPane = Boolean(
+					useTabsStore.getState().panes[paneId]?.workspaceRun,
+				);
+				if (
+					!isFocusedRef.current ||
+					(wasKilledByUserRef.current && !isWorkspaceRunPane)
+				) {
+					return;
+				}
+				// For workspace-run panes, don't restart until the run command
+				// has been resolved via tRPC query — otherwise we'd start a
+				// plain interactive shell instead of the configured command.
+				if (isWorkspaceRunPane && !defaultRestartCommandRef.current) {
+					return;
+				}
+				void restartTerminalSession();
 				return;
 			}
 			writeRef.current({ paneId, data });
@@ -365,6 +430,16 @@ export function useTerminalLifecycle({
 
 		const initialCwd = paneInitialCwdRef.current;
 
+		const paneWorkspaceRun =
+			useTabsStore.getState().panes[paneId]?.workspaceRun;
+		// A "new" workspace run is one triggered by the hook just before this mount,
+		// indicated by state === "running" AND a command already resolved.
+		// After app restart, defaultRestartCommandRef won't be set yet, so we
+		// treat that as a stale persisted state that needs recovery, not a new run.
+		const isNewWorkspaceRun =
+			paneWorkspaceRun?.state === "running" &&
+			!!defaultRestartCommandRef.current;
+
 		const cancelInitialAttach = scheduleTerminalAttach({
 			paneId,
 			priority: isFocusedRef.current ? 0 : 1,
@@ -402,6 +477,10 @@ export function useTerminalLifecycle({
 							cols: xterm.cols,
 							rows: xterm.rows,
 							cwd: initialCwd,
+							...(isNewWorkspaceRun && {
+								command: defaultRestartCommandRef.current,
+								skipColdRestore: true,
+							}),
 						},
 						{
 							onSuccess: (result) => {
@@ -464,6 +543,67 @@ export function useTerminalLifecycle({
 						},
 					);
 				};
+
+				// Handle workspace-run panes that need recovery (stopped or stale "running" after restart)
+				if (paneWorkspaceRun && !isNewWorkspaceRun) {
+					// Check if session is still alive
+					void electronTrpcClient.terminal.getSession
+						.query(paneId)
+						.then(async (existingSession) => {
+							if (isUnmounted || attachCanceled) return;
+							if (existingSession?.isAlive) {
+								// Session survived — attach normally and ensure state is "running"
+								useTabsStore.getState().setPaneWorkspaceRun(paneId, {
+									workspaceId: paneWorkspaceRun.workspaceId,
+									state: "running",
+								});
+								startAttach();
+								return;
+							}
+							// Session is dead — show exited state.
+							// If persisted state was "running", it was a stale state from before restart.
+							const wasStoppedByUser =
+								paneWorkspaceRun.state === "stopped-by-user";
+							const resolvedState =
+								paneWorkspaceRun.state === "running"
+									? "stopped-by-exit"
+									: paneWorkspaceRun.state;
+
+							// Update pane metadata to reflect resolved state
+							useTabsStore.getState().setPaneWorkspaceRun(paneId, {
+								workspaceId: paneWorkspaceRun.workspaceId,
+								state: resolvedState,
+							});
+
+							isExitedRef.current = true;
+							wasKilledByUserRef.current = wasStoppedByUser;
+							isStreamReadyRef.current = true;
+							setExitStatus(wasStoppedByUser ? "killed" : "exited");
+							if (wasStoppedByUser) {
+								xterm.writeln("\r\n[Session killed]");
+							} else {
+								xterm.writeln("\r\n[Process exited]");
+							}
+							xterm.writeln("[Press any key to restart]");
+							done();
+						})
+						.catch(() => {
+							if (isUnmounted || attachCanceled) return;
+							// On error, conservatively mark as exited and show restart prompt
+							useTabsStore.getState().setPaneWorkspaceRun(paneId, {
+								workspaceId: paneWorkspaceRun.workspaceId,
+								state: "stopped-by-exit",
+							});
+							isExitedRef.current = true;
+							wasKilledByUserRef.current = false;
+							isStreamReadyRef.current = true;
+							setExitStatus("exited");
+							xterm.writeln("\r\n[Process exited]");
+							xterm.writeln("[Press any key to restart]");
+							done();
+						});
+					return;
+				}
 
 				startAttach();
 				return;
@@ -669,6 +809,9 @@ export function useTerminalLifecycle({
 				// Pane was explicitly destroyed, so kill the session.
 				killTerminalForPane(paneId);
 				coldRestoreState.delete(paneId);
+				pendingDetaches.delete(paneId);
+			} else if (useTabsStore.getState().panes[paneId]?.workspaceRun) {
+				// Keep workspace-run panes attached while hidden
 				pendingDetaches.delete(paneId);
 			} else {
 				const detachTimeout = setTimeout(() => {

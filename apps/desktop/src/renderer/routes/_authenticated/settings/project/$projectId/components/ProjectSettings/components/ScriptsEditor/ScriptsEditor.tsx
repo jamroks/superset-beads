@@ -13,9 +13,10 @@ interface ScriptsEditorProps {
 function parseContentFromConfig(content: string | null): {
 	setup: string;
 	teardown: string;
+	run: string;
 } {
 	if (!content) {
-		return { setup: "", teardown: "" };
+		return { setup: "", teardown: "", run: "" };
 	}
 
 	try {
@@ -23,9 +24,10 @@ function parseContentFromConfig(content: string | null): {
 		return {
 			setup: (parsed.setup ?? []).join("\n"),
 			teardown: (parsed.teardown ?? []).join("\n"),
+			run: (parsed.run ?? []).join("\n"),
 		};
 	} catch {
-		return { setup: "", teardown: "" };
+		return { setup: "", teardown: "", run: "" };
 	}
 }
 
@@ -168,15 +170,15 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 
 	const [setupContent, setSetupContent] = useState("");
 	const [teardownContent, setTeardownContent] = useState("");
+	const [runContent, setRunContent] = useState("");
 	const [hasChanges, setHasChanges] = useState(false);
 
 	useEffect(() => {
-		if (configData?.content) {
-			const parsed = parseContentFromConfig(configData.content);
-			setSetupContent(parsed.setup);
-			setTeardownContent(parsed.teardown);
-			setHasChanges(false);
-		}
+		const parsed = parseContentFromConfig(configData?.content ?? null);
+		setSetupContent(parsed.setup);
+		setTeardownContent(parsed.teardown);
+		setRunContent(parsed.run);
+		setHasChanges(false);
 	}, [configData?.content]);
 
 	const updateConfigMutation = electronTrpc.config.updateConfig.useMutation({
@@ -197,12 +199,24 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 		setHasChanges(true);
 	}, []);
 
+	const handleRunChange = useCallback((value: string) => {
+		setRunContent(value);
+		setHasChanges(true);
+	}, []);
+
 	const handleSave = useCallback(() => {
 		const setup = setupContent.trim() ? [setupContent.trim()] : [];
 		const teardown = teardownContent.trim() ? [teardownContent.trim()] : [];
+		const run = runContent.trim() ? [runContent.trim()] : [];
 
-		updateConfigMutation.mutate({ projectId, setup, teardown });
-	}, [projectId, setupContent, teardownContent, updateConfigMutation]);
+		updateConfigMutation.mutate({ projectId, setup, teardown, run });
+	}, [
+		projectId,
+		setupContent,
+		teardownContent,
+		runContent,
+		updateConfigMutation,
+	]);
 
 	if (isLoading) {
 		return (
@@ -258,6 +272,14 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 				placeholder="e.g. docker compose down"
 				value={teardownContent}
 				onChange={handleTeardownChange}
+			/>
+
+			<ScriptTextarea
+				title="Run"
+				description="A command to start your dev server, triggered via keyboard shortcut."
+				placeholder="e.g. bun run dev"
+				value={runContent}
+				onChange={handleRunChange}
 			/>
 		</div>
 	);

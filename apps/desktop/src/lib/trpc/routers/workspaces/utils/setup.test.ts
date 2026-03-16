@@ -529,4 +529,103 @@ describe("mergeConfigs", () => {
 		);
 		expect(result).toEqual({ setup: ["x"], teardown: ["y"] });
 	});
+
+	test("run key override with array", () => {
+		const result = mergeConfigs(
+			{ run: ["npm run dev"] },
+			{ run: ["bun run dev"] },
+		);
+		expect(result).toEqual({ run: ["bun run dev"] });
+	});
+
+	test("run key merge with before/after", () => {
+		const result = mergeConfigs(
+			{ run: ["npm run dev"] },
+			{ run: { before: ["echo starting"], after: ["echo done"] } },
+		);
+		expect(result).toEqual({
+			run: ["echo starting", "npm run dev", "echo done"],
+		});
+	});
+
+	test("run key passes through when not in local config", () => {
+		const result = mergeConfigs(
+			{ setup: ["install"], run: ["dev"] },
+			{ setup: ["custom-install"] },
+		);
+		expect(result).toEqual({ setup: ["custom-install"], run: ["dev"] });
+	});
+});
+
+describe("run config", () => {
+	beforeEach(() => {
+		mkdirSync(join(MAIN_REPO, ".superset"), { recursive: true });
+	});
+
+	afterEach(() => {
+		if (existsSync(TEST_DIR)) {
+			rmSync(TEST_DIR, { recursive: true, force: true });
+		}
+	});
+
+	test("loads run commands from config", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({
+				setup: ["bun install"],
+				run: ["bun run dev"],
+			}),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		expect(config?.run).toEqual(["bun run dev"]);
+	});
+
+	test("returns config without run when run is not set", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({ setup: ["bun install"] }),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		expect(config?.run).toBeUndefined();
+	});
+
+	test("validates run field must be an array", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({ run: "not-an-array" }),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		expect(config).toBeNull();
+	});
+
+	test("local config can override run commands", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({ run: ["npm run dev"] }),
+		);
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.local.json"),
+			JSON.stringify({ run: ["bun run dev"] }),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		expect(config?.run).toEqual(["bun run dev"]);
+	});
+
+	test("local config can merge run commands with before/after", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({ run: ["npm run dev"] }),
+		);
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.local.json"),
+			JSON.stringify({ run: { before: ["export DEBUG=1"] } }),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		expect(config?.run).toEqual(["export DEBUG=1", "npm run dev"]);
+	});
 });

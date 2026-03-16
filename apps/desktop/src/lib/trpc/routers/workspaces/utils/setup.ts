@@ -49,6 +49,10 @@ function readConfigFile(configPath: string): SetupConfig | null {
 			throw new Error("'teardown' field must be an array of strings");
 		}
 
+		if (parsed.run && !Array.isArray(parsed.run)) {
+			throw new Error("'run' field must be an array of strings");
+		}
+
 		return parsed;
 	} catch (error) {
 		console.error(
@@ -73,7 +77,7 @@ function readLocalConfigFile(filePath: string): LocalSetupConfig | null {
 		const content = readFileSync(filePath, "utf-8");
 		const parsed = JSON.parse(content) as LocalSetupConfig;
 
-		for (const key of ["setup", "teardown"] as const) {
+		for (const key of ["setup", "teardown", "run"] as const) {
 			const value = parsed[key];
 			if (value === undefined) continue;
 
@@ -123,7 +127,7 @@ export function mergeConfigs(
 ): SetupConfig {
 	const result: SetupConfig = { ...base };
 
-	for (const key of ["setup", "teardown"] as const) {
+	for (const key of ["setup", "teardown", "run"] as const) {
 		const localValue = local[key];
 		if (localValue === undefined) continue;
 
