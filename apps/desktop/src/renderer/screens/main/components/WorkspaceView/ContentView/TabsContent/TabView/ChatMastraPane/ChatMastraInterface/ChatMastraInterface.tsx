@@ -206,9 +206,7 @@ export function ChatMastraInterface({
 		availableModels.find((model) => model.id === selectedModelId) ?? null;
 	const activeModel = selectedModel ?? defaultModel;
 	const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
-	const thinkingLevel = useChatPreferencesStore(
-		(state) => state.thinkingLevel,
-	);
+	const thinkingLevel = useChatPreferencesStore((state) => state.thinkingLevel);
 	const setThinkingLevel = useChatPreferencesStore(
 		(state) => state.setThinkingLevel,
 	);
