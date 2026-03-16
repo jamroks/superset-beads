@@ -68,17 +68,15 @@ export const ThinkingToggle = ({
 							<Button
 								type="button"
 								variant="ghost"
-								size="icon-sm"
 								className={cn(
+									"px-2 gap-1 text-xs",
 									isActive && "bg-accent text-accent-foreground",
 									className,
 								)}
 								{...props}
 							>
-								<BrainIcon className="size-4" />
-								<span className="text-[10px] leading-none">
-									{activeOption.label}
-								</span>
+								<BrainIcon className="size-3.5" />
+								<span>{activeOption.label}</span>
 								<ChevronDownIcon className="size-2.5 opacity-50" />
 								<span className="sr-only">
 									{isActive

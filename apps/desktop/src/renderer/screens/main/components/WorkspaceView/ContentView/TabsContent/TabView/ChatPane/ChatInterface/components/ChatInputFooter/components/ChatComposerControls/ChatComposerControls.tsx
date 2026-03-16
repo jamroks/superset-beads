@@ -66,7 +66,7 @@ export function ChatComposerControls({
 				<ThinkingToggle
 					level={thinkingLevel}
 					onLevelChange={setThinkingLevel}
-					className={`${PILL_BUTTON_CLASS} [&>svg]:size-3.5`}
+					className={PILL_BUTTON_CLASS}
 				/>
 			</PromptInputTools>
 			<div className="flex items-center gap-2">
