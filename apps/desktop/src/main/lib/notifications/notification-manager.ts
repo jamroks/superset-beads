@@ -74,7 +74,7 @@ export class NotificationManager {
 			silent: true,
 		});
 
-		const key = event.paneId ?? event.sessionId ?? `_anon_${this.counter++}`;
+		const key = event.sessionId ?? event.paneId ?? `_anon_${this.counter++}`;
 		this.track(key, notification);
 
 		this.deps.playSound();
@@ -86,11 +86,11 @@ export class NotificationManager {
 				workspaceId: event.workspaceId,
 				sessionId: event.sessionId,
 			});
-			this.untrack(key);
+			this.untrack(key, notification);
 		});
 
 		notification.on("close", () => {
-			this.untrack(key);
+			this.untrack(key, notification);
 		});
 
 		notification.show();
@@ -134,7 +134,10 @@ export class NotificationManager {
 		this.active.set(key, { notification, createdAt: Date.now() });
 	}
 
-	private untrack(key: string): void {
+	private untrack(key: string, notification?: NativeNotification): void {
+		const current = this.active.get(key);
+		if (!current) return;
+		if (notification && current.notification !== notification) return;
 		this.active.delete(key);
 	}
 

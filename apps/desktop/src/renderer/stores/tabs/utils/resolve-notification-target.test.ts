@@ -161,6 +161,26 @@ describe("resolveNotificationTarget", () => {
 		});
 	});
 
+	describe("with stale paneId and no session match", () => {
+		it("drops the invalid paneId instead of returning it", () => {
+			const state = {
+				panes: {},
+				tabs: [createTab("tab-1", "ws-1")],
+			};
+
+			const result = resolveNotificationTarget(
+				{ paneId: "missing", tabId: "tab-1" },
+				state,
+			);
+
+			expect(result).toEqual({
+				paneId: undefined,
+				tabId: "tab-1",
+				workspaceId: "ws-1",
+			});
+		});
+	});
+
 	describe("with no resolvable workspaceId", () => {
 		it("returns null when no IDs provided", () => {
 			const state = { panes: {}, tabs: [] };

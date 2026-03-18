@@ -29,8 +29,9 @@ export function resolveNotificationTarget(
 		: undefined;
 	const resolvedPaneId =
 		(paneId && state.panes[paneId] ? paneId : undefined) ??
-		paneIdFromSession ??
-		paneId;
+		(paneIdFromSession && state.panes[paneIdFromSession]
+			? paneIdFromSession
+			: undefined);
 	const pane = resolvedPaneId ? state.panes[resolvedPaneId] : undefined;
 
 	// Resolve tabId: prefer pane's tabId, fallback to event tabId
