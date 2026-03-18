@@ -74,7 +74,7 @@ export class NotificationManager {
 			silent: true,
 		});
 
-		const key = event.paneId ?? `_anon_${this.counter++}`;
+		const key = event.paneId ?? event.sessionId ?? `_anon_${this.counter++}`;
 		this.track(key, notification);
 
 		this.deps.playSound();
@@ -84,6 +84,7 @@ export class NotificationManager {
 				paneId: event.paneId,
 				tabId: event.tabId,
 				workspaceId: event.workspaceId,
+				sessionId: event.sessionId,
 			});
 			this.untrack(key);
 		});

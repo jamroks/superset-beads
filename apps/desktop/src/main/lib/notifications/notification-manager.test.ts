@@ -154,12 +154,27 @@ describe("NotificationManager", () => {
 				paneId: "p1",
 				tabId: "t1",
 				workspaceId: "w1",
+				sessionId: "s1",
 			});
 			manager.handleAgentLifecycle(event);
 			lastNotification(deps).trigger("click");
 			expect(deps.clickedIds).toEqual([
-				{ paneId: "p1", tabId: "t1", workspaceId: "w1" },
+				{ paneId: "p1", tabId: "t1", workspaceId: "w1", sessionId: "s1" },
 			]);
+		});
+
+		it("replaces notification for the same session when paneId is missing", () => {
+			manager.handleAgentLifecycle(
+				makeEvent({ paneId: undefined, sessionId: "session-1" }),
+			);
+			const first = lastNotification(deps);
+			expect(manager.activeCount).toBe(1);
+
+			manager.handleAgentLifecycle(
+				makeEvent({ paneId: undefined, sessionId: "session-1" }),
+			);
+			expect(manager.activeCount).toBe(1);
+			expect(first.close).toHaveBeenCalled();
 		});
 
 		it("assigns unique keys when paneId is missing", () => {
