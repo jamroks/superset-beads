@@ -587,6 +587,23 @@ export function AppMockup({ activeDemo = "Use Any Agents" }: AppMockupProps) {
 								<div className="text-muted-foreground/60">
 									tip: <span className="text-[#D97757]/65">/mcp disable</span>
 								</div>
+
+								<div className="mt-4 rounded-lg border border-white/[0.08] bg-black/25 px-3 py-2.5">
+									<div className="text-muted-foreground/35">
+										Ask Claude to enable browser automation...
+									</div>
+									<div className="mt-2 flex items-center justify-between">
+										<div className="flex items-center gap-2 text-[11px] text-muted-foreground/30">
+											<div className="flex size-5 items-center justify-center rounded border border-white/[0.06] bg-white/[0.03]">
+												<LuPlus className="size-3" />
+											</div>
+											<span>context</span>
+										</div>
+										<div className="flex size-5 items-center justify-center rounded-full bg-[#D97757]/15 text-[11px] text-[#D97757]/80">
+											↑
+										</div>
+									</div>
+								</div>
 							</div>
 						</motion.div>
 
