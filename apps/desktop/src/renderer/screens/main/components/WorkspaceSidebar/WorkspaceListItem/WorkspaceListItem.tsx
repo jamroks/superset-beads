@@ -5,6 +5,7 @@ import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
+import { LuGripVertical } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useWorkspaceDeleteHandler } from "renderer/react-query/workspaces";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
@@ -95,18 +96,25 @@ export function WorkspaceListItem({
 	});
 
 	const itemRef = useRef<HTMLElement | null>(null);
+	const rowRef = useRef<HTMLDivElement | null>(null);
+	const dragHandleRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
 		if (isActive) {
 			itemRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 		}
 	}, [isActive]);
 
-	const { isDragging, drag, drop } = useWorkspaceDnD({
+	const { isDragging, drag, drop, preview } = useWorkspaceDnD({
 		id,
 		projectId,
 		sectionId,
 		index,
 	});
+
+	useEffect(() => {
+		preview(drop(rowRef));
+		drag(dragHandleRef);
+	}, [preview, drop, drag]);
 
 	const openInFinder = electronTrpc.external.openInFinder.useMutation({
 		onError: (error) => toast.error(`Failed to open: ${error.message}`),
@@ -253,8 +261,8 @@ export function WorkspaceListItem({
 			role="button"
 			tabIndex={0}
 			ref={(node) => {
+				rowRef.current = node;
 				itemRef.current = node;
-				drag(drop(node));
 			}}
 			onClick={handleClick}
 			onKeyDown={(e) => {
@@ -285,6 +293,23 @@ export function WorkspaceListItem({
 			{isActive && (
 				<div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary rounded-r" />
 			)}
+
+			<button
+				type="button"
+				ref={dragHandleRef}
+				onClick={(e) => e.stopPropagation()}
+				onDoubleClick={(e) => e.stopPropagation()}
+				aria-label="Reorder workspace"
+				className={cn(
+					"flex shrink-0 items-center justify-center mr-1.5 w-4 rounded-sm",
+					"text-muted-foreground/45 transition-[opacity,color] cursor-grab active:cursor-grabbing",
+					"invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100",
+					"hover:text-foreground/70",
+					isDragging && "visible opacity-100 text-foreground/70",
+				)}
+			>
+				<LuGripVertical className="size-3.5" />
+			</button>
 
 			<Tooltip delayDuration={500}>
 				<TooltipTrigger asChild>
