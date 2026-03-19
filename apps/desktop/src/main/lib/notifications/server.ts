@@ -28,6 +28,9 @@ const DEBUG_HOOKS_ENABLED =
 		? SERVER_ENV === "development"
 		: !/^(0|false)$/i.test(debugHooksOverride);
 
+/**
+ * Broadcasts normalized agent lifecycle events from the local hook server.
+ */
 export const notificationsEmitter = new EventEmitter();
 
 const app = express();
@@ -203,4 +206,7 @@ app.use((_req, res) => {
 	res.status(404).json({ error: "Not found" });
 });
 
+/**
+ * Exposes the notifications Express app for startup and tests.
+ */
 export const notificationsApp = app;

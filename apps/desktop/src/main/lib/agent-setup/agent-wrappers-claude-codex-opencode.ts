@@ -27,6 +27,9 @@ const CODEX_WRAPPER_EXEC_TEMPLATE_PATH = path.join(
 	"codex-wrapper-exec.template.sh",
 );
 
+/**
+ * Returns the environment-scoped OpenCode plugin path under Superset home.
+ */
 export function getOpenCodePluginPath(): string {
 	return path.join(OPENCODE_PLUGIN_DIR, OPENCODE_PLUGIN_FILE);
 }
@@ -69,6 +72,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Returns the shell command written into Claude's global hook config.
+ * The notify path is resolved at runtime from SUPERSET_HOME_DIR so one
+ * shared ~/.claude/settings.json works for both dev and prod installs.
+ */
 export function getClaudeManagedHookCommand(): string {
 	return `[ -n "$SUPERSET_HOME_DIR" ] && [ -x "$SUPERSET_HOME_DIR/${CLAUDE_DYNAMIC_NOTIFY_RELATIVE_PATH}" ] && "$SUPERSET_HOME_DIR/${CLAUDE_DYNAMIC_NOTIFY_RELATIVE_PATH}" || true`;
 }
@@ -135,6 +143,9 @@ function removeManagedClaudeHooksFromDefinition(
 	};
 }
 
+/**
+ * Returns the global Claude settings path used for native hook registration.
+ */
 export function getClaudeGlobalSettingsJsonPath(): string {
 	return path.join(os.homedir(), ".claude", "settings.json");
 }
@@ -242,6 +253,9 @@ export function createClaudeSettingsJson(): void {
 	);
 }
 
+/**
+ * Renders the OpenCode plugin file content with the current notify script path.
+ */
 export function getOpenCodePluginContent(notifyPath: string): string {
 	const template = fs.readFileSync(OPENCODE_PLUGIN_TEMPLATE_PATH, "utf-8");
 	return template
@@ -249,6 +263,9 @@ export function getOpenCodePluginContent(notifyPath: string): string {
 		.replace("{{NOTIFY_PATH}}", notifyPath);
 }
 
+/**
+ * Creates the Claude wrapper that forwards SUPERSET_* env vars into the agent.
+ */
 export function createClaudeWrapper(): void {
 	// Hooks are now written directly to ~/.claude/settings.json via
 	// createClaudeSettingsJson(), so the wrapper is a plain pass-through.
@@ -258,6 +275,9 @@ export function createClaudeWrapper(): void {
 	createWrapper("claude", script);
 }
 
+/**
+ * Creates the Codex wrapper that injects Superset's notify/session-log logic.
+ */
 export function createCodexWrapper(): void {
 	const notifyPath = getNotifyScriptPath();
 	const script = buildWrapperScript(
@@ -267,6 +287,9 @@ export function createCodexWrapper(): void {
 	createWrapper("codex", script);
 }
 
+/**
+ * Builds the Codex wrapper exec block from the shell template.
+ */
 export function buildCodexWrapperExecLine(notifyPath: string): string {
 	const template = fs.readFileSync(CODEX_WRAPPER_EXEC_TEMPLATE_PATH, "utf-8");
 	return template.replaceAll("{{NOTIFY_PATH}}", notifyPath);
@@ -302,6 +325,9 @@ function readExistingCodexHooks(globalPath: string): CodexHooksJson | null {
 	}
 }
 
+/**
+ * Returns the global Codex hooks.json path used for fallback hook registration.
+ */
 export function getCodexGlobalHooksJsonPath(): string {
 	return path.join(os.homedir(), ".codex", "hooks.json");
 }
@@ -434,6 +460,9 @@ export function cleanupGlobalOpenCodePlugin(): void {
 	}
 }
 
+/**
+ * Creates the OpenCode wrapper with an environment-scoped config directory.
+ */
 export function createOpenCodeWrapper(): void {
 	const script = buildWrapperScript(
 		"opencode",
