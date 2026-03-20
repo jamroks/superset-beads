@@ -27,7 +27,6 @@ export interface UseChatDisplayOptions {
 
 const DEFAULT_ACTIVE_POLL_FPS = 30;
 const MAX_ACTIVE_POLL_FPS = 30;
-const IDLE_DISPLAY_REFRESH_INTERVAL_MS = 2_000;
 
 export function toActiveRefetchIntervalMs(fps: number): number {
 	const normalizedFps =
@@ -120,29 +119,18 @@ function getLegacyImagePayload(
 }
 
 export function useChatDisplay(options: UseChatDisplayOptions) {
-	const {
-		sessionId,
-		cwd,
-		enabled = true,
-		fps = DEFAULT_ACTIVE_POLL_FPS,
-	} = options;
+	const { sessionId, cwd, enabled = true } = options;
 	const utils = chatRuntimeServiceTrpc.useUtils();
 	const [commandError, setCommandError] = useState<unknown>(null);
 	const sessionCommandInput =
 		sessionId === null ? null : { sessionId, ...(cwd ? { cwd } : {}) };
 	const queryInput = sessionCommandInput ?? skipToken;
 	const isQueryEnabled = enabled && Boolean(sessionId);
-	const activeRefetchIntervalMs = toActiveRefetchIntervalMs(fps);
 
 	const displayQuery = chatRuntimeServiceTrpc.session.getDisplayState.useQuery(
 		queryInput,
 		{
 			enabled: isQueryEnabled,
-			refetchInterval: (query) =>
-				query.state.data?.isRunning
-					? activeRefetchIntervalMs
-					: IDLE_DISPLAY_REFRESH_INTERVAL_MS,
-			refetchIntervalInBackground: false,
 			refetchOnWindowFocus: true,
 			staleTime: 0,
 			gcTime: 0,
@@ -183,7 +171,6 @@ export function useChatDisplay(options: UseChatDisplayOptions) {
 	const optimisticTextRef = useRef<string | null>(null);
 	const optimisticIdRef = useRef<string | null>(null);
 	const fileMessageCountAtSendRef = useRef<number | null>(null);
-	const previousIsRunningRef = useRef(isRunning);
 
 	const refreshSessionState = useCallback(async () => {
 		if (!sessionCommandInput) return;
@@ -228,16 +215,28 @@ export function useChatDisplay(options: UseChatDisplayOptions) {
 		fileMessageCountAtSendRef.current = null;
 	}, [historicalMessages]);
 
-	useEffect(() => {
-		const wasRunning = previousIsRunningRef.current;
-		previousIsRunningRef.current = isRunning;
+	chatRuntimeServiceTrpc.session.subscribe.useSubscription(
+		isQueryEnabled && sessionCommandInput ? sessionCommandInput : skipToken,
+		{
+			onData: (event) => {
+				if (!sessionCommandInput) {
+					return;
+				}
 
-		if (!wasRunning || isRunning || !sessionCommandInput) {
-			return;
-		}
+				utils.session.getDisplayState.setData(
+					sessionCommandInput,
+					event.displayState,
+				);
 
-		void utils.session.listMessages.invalidate(sessionCommandInput);
-	}, [isRunning, sessionCommandInput, utils.session.listMessages]);
+				if (event.messagesChanged) {
+					void utils.session.listMessages.invalidate(sessionCommandInput);
+				}
+			},
+			onError: () => {
+				void refreshSessionState();
+			},
+		},
+	);
 
 	const messages = useMemo(() => {
 		const withOptimistic = optimisticUserMessage
