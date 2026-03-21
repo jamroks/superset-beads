@@ -16,13 +16,16 @@ interface KillPortsResult {
 export function useKillPort() {
 	const killMutation = electronTrpc.ports.kill.useMutation();
 
-	const killPort = async (
-		port: Pick<EnrichedPort, "paneId" | "port">,
-	): Promise<KillPortResult> => {
-		const result = await killMutation.mutateAsync({
+	const mutatePortKill = (port: Pick<EnrichedPort, "paneId" | "port">) =>
+		killMutation.mutateAsync({
 			paneId: port.paneId,
 			port: port.port,
 		});
+
+	const killPort = async (
+		port: Pick<EnrichedPort, "paneId" | "port">,
+	): Promise<KillPortResult> => {
+		const result = await mutatePortKill(port);
 		if (!result.success) {
 			toast.error(`Failed to close port ${port.port}`, {
 				description: result.error,
@@ -41,12 +44,7 @@ export function useKillPort() {
 		}
 
 		const results = await Promise.all(
-			ports.map((port) =>
-				killMutation.mutateAsync({
-					paneId: port.paneId,
-					port: port.port,
-				}),
-			),
+			ports.map((port) => mutatePortKill(port)),
 		);
 
 		const failedCount = results.filter((result) => !result.success).length;
