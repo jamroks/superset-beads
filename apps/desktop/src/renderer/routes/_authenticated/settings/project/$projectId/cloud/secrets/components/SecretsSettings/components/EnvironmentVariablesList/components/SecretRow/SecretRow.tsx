@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { format } from "date-fns";
 import { useCallback, useState } from "react";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import {
 	HiEllipsisHorizontal,
 	HiEye,
@@ -61,11 +62,12 @@ export function SecretRow({
 		}
 	}, [secret.id, secret.key, organizationId, onDeleted]);
 
-	const handleCopy = useCallback(async () => {
-		await navigator.clipboard.writeText(secret.value).catch(() => {});
+	const copyToClipboard = useCopyToClipboard();
+	const handleCopy = useCallback(() => {
+		copyToClipboard(secret.value);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1500);
-	}, [secret.value]);
+	}, [secret.value, copyToClipboard]);
 
 	const isEmpty = !secret.sensitive && !secret.value;
 

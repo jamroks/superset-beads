@@ -11,6 +11,7 @@ import {
 import type { DiffViewMode } from "shared/changes-types";
 import type { FileViewerMode } from "shared/tabs-types";
 import { PaneToolbarActions } from "../../../components";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import type { SplitOrientation } from "../../../hooks";
 
 interface FileViewerToolbarProps {
@@ -54,10 +55,11 @@ export function FileViewerToolbar({
 	onPin,
 	onClosePane,
 }: FileViewerToolbarProps) {
+	const copyToClipboard = useCopyToClipboard();
 	const [copied, setCopied] = useState(false);
 
 	const handleCopyPath = () => {
-		void navigator.clipboard.writeText(filePath).catch(() => {});
+		copyToClipboard(filePath);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1500);
 	};

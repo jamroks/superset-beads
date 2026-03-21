@@ -31,6 +31,7 @@ import {
 	HiOutlinePlus,
 	HiOutlineTrash,
 } from "react-icons/hi2";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { apiTrpcClient } from "renderer/lib/api-trpc-client";
 import { authClient } from "renderer/lib/auth-client";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
@@ -100,8 +101,9 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 		});
 	};
 
+	const copyToClipboard = useCopyToClipboard();
 	const handleCopyKey = () => {
-		void navigator.clipboard.writeText(newKeyValue).catch(() => {});
+		copyToClipboard(newKeyValue);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};

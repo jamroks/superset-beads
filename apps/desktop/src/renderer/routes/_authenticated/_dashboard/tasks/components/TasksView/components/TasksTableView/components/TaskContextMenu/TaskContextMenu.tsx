@@ -10,6 +10,7 @@ import {
 } from "@superset/ui/context-menu";
 import { useLiveQuery } from "@tanstack/react-db";
 import { type ReactNode, useMemo } from "react";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import {
 	HiOutlineDocumentDuplicate,
 	HiOutlineTrash,
@@ -87,12 +88,14 @@ export function TaskContextMenu({
 		}
 	};
 
+	const copyToClipboard = useCopyToClipboard();
+
 	const handleCopyId = () => {
-		void navigator.clipboard.writeText(task.slug).catch(() => {});
+		copyToClipboard(task.slug);
 	};
 
 	const handleCopyTitle = () => {
-		void navigator.clipboard.writeText(task.title).catch(() => {});
+		copyToClipboard(task.title);
 	};
 
 	const handleDelete = () => {

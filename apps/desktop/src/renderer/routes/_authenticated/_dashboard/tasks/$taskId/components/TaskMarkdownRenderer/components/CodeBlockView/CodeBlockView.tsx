@@ -8,6 +8,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react";
 import { useState } from "react";
 import { HiCheck, HiChevronDown, HiOutlineClipboard } from "react-icons/hi2";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import {
 	COMMON_CODE_BLOCK_LANGUAGES,
 	getCodeBlockLanguageLabel,
@@ -30,8 +31,9 @@ export function CodeBlockView({
 		currentLanguage,
 	);
 
-	const handleCopy = async () => {
-		await navigator.clipboard.writeText(node.textContent).catch(() => {});
+	const copyToClipboard = useCopyToClipboard();
+	const handleCopy = () => {
+		copyToClipboard(node.textContent);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
 	};
