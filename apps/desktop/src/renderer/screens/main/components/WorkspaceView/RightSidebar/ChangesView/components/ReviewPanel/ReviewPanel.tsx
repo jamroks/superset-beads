@@ -1,22 +1,26 @@
 import type { GitHubStatus, PullRequestComment } from "@superset/local-db";
 import { Avatar, AvatarFallback, AvatarImage } from "@superset/ui/avatar";
+import { Button } from "@superset/ui/button";
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@superset/ui/collapsible";
 import { Skeleton } from "@superset/ui/skeleton";
+import { toast } from "@superset/ui/sonner";
 import { cn } from "@superset/ui/utils";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	LuArrowUpRight,
 	LuCheck,
+	LuCopy,
 	LuLoaderCircle,
 	LuMessageSquareText,
 	LuMinus,
 	LuX,
 } from "react-icons/lu";
 import { VscChevronRight } from "react-icons/vsc";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { PRIcon } from "renderer/screens/main/components/PRIcon";
 
 interface ReviewPanelProps {
@@ -90,6 +94,25 @@ const prStateLabel = {
 	closed: "Closed",
 } as const;
 
+function getCheckUrl(
+	check: NonNullable<GitHubStatus["pr"]>["checks"][number],
+	prUrl: string,
+): string | undefined {
+	if (check.url) {
+		return check.url;
+	}
+
+	const normalizedName = check.name.trim().toLowerCase();
+	if (
+		normalizedName.includes("coderabbit") ||
+		normalizedName.includes("code rabbit")
+	) {
+		return prUrl;
+	}
+
+	return undefined;
+}
+
 function getCommentPreview(body: string): string {
 	return (
 		body
@@ -143,6 +166,32 @@ function getCommentKindLabel(comment: PullRequestComment): string {
 	return comment.kind === "review" ? "Review" : "Comment";
 }
 
+function formatCommentForClipboard(
+	comment: PullRequestComment,
+	includeMetadata = false,
+): string {
+	const body = comment.body.trim() || "No comment body";
+
+	if (!includeMetadata) {
+		return body;
+	}
+
+	const location = getCommentLocation(comment);
+	const metadata = [
+		comment.authorLogin,
+		getCommentKindLabel(comment),
+		location,
+	].filter(Boolean);
+
+	return [metadata.join(" • "), body].filter(Boolean).join("\n");
+}
+
+function formatAllCommentsForClipboard(comments: PullRequestComment[]): string {
+	return comments
+		.map((comment) => formatCommentForClipboard(comment, true))
+		.join("\n\n---\n\n");
+}
+
 export function ReviewPanel({
 	pr,
 	comments = [],
@@ -151,6 +200,63 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
 	const [checksOpen, setChecksOpen] = useState(true);
 	const [commentsOpen, setCommentsOpen] = useState(true);
+	const [copiedItemKey, setCopiedItemKey] = useState<string | null>(null);
+	const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const copyTextMutation = electronTrpc.external.copyText.useMutation();
+
+	useEffect(() => {
+		return () => {
+			if (copyResetTimerRef.current) {
+				clearTimeout(copyResetTimerRef.current);
+			}
+		};
+	}, []);
+
+	const setCopiedState = (key: string) => {
+		if (copyResetTimerRef.current) {
+			clearTimeout(copyResetTimerRef.current);
+		}
+
+		setCopiedItemKey(key);
+		copyResetTimerRef.current = setTimeout(() => {
+			setCopiedItemKey(null);
+			copyResetTimerRef.current = null;
+		}, 1500);
+	};
+
+	const handleCopyText = async ({
+		text,
+		key,
+		errorLabel,
+	}: {
+		text: string;
+		key: string;
+		errorLabel: string;
+	}) => {
+		try {
+			await copyTextMutation.mutateAsync(text);
+			setCopiedState(key);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			toast.error(`${errorLabel}: ${message}`);
+		}
+	};
+
+	const handleCopyComment = (comment: PullRequestComment) => {
+		void handleCopyText({
+			text: formatCommentForClipboard(comment),
+			key: `comment-${comment.id}`,
+			errorLabel: "Failed to copy comment",
+		});
+	};
+
+	const handleCopyAllComments = () => {
+		void handleCopyText({
+			text: formatAllCommentsForClipboard(comments),
+			key: "all-comments",
+			errorLabel: "Failed to copy comments",
+		});
+	};
 
 	if (isLoading && !pr) {
 		return (
@@ -300,14 +406,15 @@ export function ReviewPanel({
 						relevantChecks.map((check) => {
 							const { icon: CheckIcon, className } =
 								checkIconConfig[check.status];
+							const checkUrl = getCheckUrl(check, pr.url);
 
-							return check.url ? (
+							return checkUrl ? (
 								<a
 									key={check.name}
-									href={check.url}
+									href={checkUrl}
 									target="_blank"
 									rel="noopener noreferrer"
-									className="block"
+									className="group block"
 								>
 									<div className="flex min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1.5 text-xs transition-colors hover:bg-accent/30">
 										<CheckIcon
@@ -317,15 +424,15 @@ export function ReviewPanel({
 												check.status === "pending" && "animate-spin",
 											)}
 										/>
-										<span className="min-w-0 flex-1 truncate">
-											{check.name}
-										</span>
+										<div className="flex min-w-0 flex-1 items-center gap-1">
+											<span className="min-w-0 truncate">{check.name}</span>
+											<LuArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+										</div>
 										{check.durationText && (
 											<span className="shrink-0 text-[10px] text-muted-foreground">
 												{check.durationText}
 											</span>
 										)}
-										<LuArrowUpRight className="size-3.5 shrink-0 text-muted-foreground/70" />
 									</div>
 								</a>
 							) : (
@@ -358,10 +465,10 @@ export function ReviewPanel({
 				onOpenChange={setCommentsOpen}
 				className="flex min-h-0 flex-1 flex-col"
 			>
-				<div className="group flex items-center min-w-0">
+				<div className="group flex min-w-0 items-center">
 					<CollapsibleTrigger
 						className={cn(
-							"flex-1 flex items-center gap-1.5 px-2 py-1.5 text-left min-w-0",
+							"flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left",
 							"hover:bg-accent/30 cursor-pointer transition-colors",
 						)}
 					>
@@ -377,6 +484,28 @@ export function ReviewPanel({
 							{isCommentsLoading ? "..." : comments.length}
 						</span>
 					</CollapsibleTrigger>
+					{comments.length > 0 && (
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className="mr-1 h-6 gap-1 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+							onClick={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								handleCopyAllComments();
+							}}
+						>
+							{copiedItemKey === "all-comments" ? (
+								<LuCheck className="size-3" />
+							) : (
+								<LuCopy className="size-3" />
+							)}
+							<span>
+								{copiedItemKey === "all-comments" ? "Copied" : "Copy all"}
+							</span>
+						</Button>
+					)}
 				</div>
 				<CollapsibleContent className="min-h-0 flex-1 overflow-hidden">
 					<div className="h-full overflow-y-auto px-0.5 py-1">
@@ -394,6 +523,8 @@ export function ReviewPanel({
 							comments.map((comment) => {
 								const location = getCommentLocation(comment);
 								const age = formatShortAge(comment.createdAt);
+								const copyKey = `comment-${comment.id}`;
+								const isCopied = copiedItemKey === copyKey;
 								const content = (
 									<>
 										<Avatar className="mt-0.5 size-5 shrink-0">
@@ -426,32 +557,53 @@ export function ReviewPanel({
 													{location}
 												</p>
 											)}
-											<p className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground">
+											<p className="mt-0.5 line-clamp-1 text-xs leading-4 text-muted-foreground">
 												{getCommentPreview(comment.body)}
 											</p>
 										</div>
 										{comment.url ? (
-											<LuArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" />
+											<LuArrowUpRight className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" />
 										) : null}
 									</>
 								);
 
-								const baseClassName =
-									"flex items-start gap-2 rounded-sm px-1.5 py-1.5";
-
-								return comment.url ? (
-									<a
+								return (
+									<div
 										key={comment.id}
-										href={comment.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										className={`${baseClassName} transition-colors hover:bg-accent/30`}
+										className="group flex items-start gap-1 rounded-sm px-1.5 py-1.5 transition-colors hover:bg-accent/30"
 									>
-										{content}
-									</a>
-								) : (
-									<div key={comment.id} className={baseClassName}>
-										{content}
+										{comment.url ? (
+											<a
+												href={comment.url}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="flex min-w-0 flex-1 items-start gap-2"
+											>
+												{content}
+											</a>
+										) : (
+											<div className="flex min-w-0 flex-1 items-start gap-2">
+												{content}
+											</div>
+										)}
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											className="mt-0.5 size-5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-accent"
+											onClick={(event) => {
+												event.preventDefault();
+												event.stopPropagation();
+												handleCopyComment(comment);
+											}}
+											aria-label={isCopied ? "Copied comment" : "Copy comment"}
+										>
+											{isCopied ? (
+												<LuCheck className="size-3" />
+											) : (
+												<LuCopy className="size-3" />
+											)}
+										</Button>
 									</div>
 								);
 							})

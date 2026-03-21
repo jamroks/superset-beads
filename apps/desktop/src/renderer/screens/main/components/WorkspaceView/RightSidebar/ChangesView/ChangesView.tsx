@@ -1,4 +1,3 @@
-import * as TabsPrimitive from "@radix-ui/react-tabs";
 import {
 	AlertDialog,
 	AlertDialogContent,
@@ -9,6 +8,7 @@ import {
 } from "@superset/ui/alert-dialog";
 import { Button } from "@superset/ui/button";
 import { toast } from "@superset/ui/sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@superset/ui/tabs";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
@@ -668,14 +668,14 @@ export function ChangesView({
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
-			<TabsPrimitive.Root
+			<Tabs
 				value={activeTab}
 				onValueChange={(value) => setActiveTab(value as ChangesSidebarTab)}
 				className="flex flex-1 min-h-0 flex-col gap-0"
 			>
-				<div className="h-10 shrink-0 border-b bg-background">
-					<TabsPrimitive.List className="flex h-full w-full items-stretch justify-start gap-0">
-						<TabsPrimitive.Trigger
+				<div className="h-8 shrink-0 border-b bg-background">
+					<TabsList className="flex h-full w-full items-stretch justify-start gap-0 rounded-none bg-transparent p-0">
+						<TabsTrigger
 							value="diffs"
 							className={sidebarHeaderTabTriggerClassName}
 						>
@@ -683,8 +683,8 @@ export function ChangesView({
 							<span className="text-[11px] text-muted-foreground/60 tabular-nums">
 								{againstMainCount}
 							</span>
-						</TabsPrimitive.Trigger>
-						<TabsPrimitive.Trigger
+						</TabsTrigger>
+						<TabsTrigger
 							value="review"
 							className={sidebarHeaderTabTriggerClassName}
 						>
@@ -692,11 +692,11 @@ export function ChangesView({
 							<span className="text-[11px] text-muted-foreground/60 tabular-nums">
 								{reviewCommentCount}
 							</span>
-						</TabsPrimitive.Trigger>
-					</TabsPrimitive.List>
+						</TabsTrigger>
+					</TabsList>
 				</div>
 
-				<TabsPrimitive.Content
+				<TabsContent
 					value="diffs"
 					className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
 				>
@@ -765,9 +765,9 @@ export function ChangesView({
 								))}
 						</div>
 					)}
-				</TabsPrimitive.Content>
+				</TabsContent>
 
-				<TabsPrimitive.Content
+				<TabsContent
 					value="review"
 					className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
 				>
@@ -777,8 +777,8 @@ export function ChangesView({
 						isLoading={isGitHubStatusLoading}
 						isCommentsLoading={isGitHubCommentsLoading}
 					/>
-				</TabsPrimitive.Content>
-			</TabsPrimitive.Root>
+				</TabsContent>
+			</Tabs>
 
 			<AlertDialog
 				open={showDiscardUnstagedDialog}

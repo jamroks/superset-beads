@@ -541,7 +541,7 @@ function parseChecks(rollup: GHPRResponse["statusCheckRollup"]): CheckItem[] {
 	// StatusContext (context/targetUrl/state). Normalize both here.
 	return rollup.map((ctx) => {
 		const name = ctx.name || ctx.context || "Unknown check";
-		const url = ctx.detailsUrl || ctx.targetUrl;
+		const url = ctx.detailsUrl?.trim() || ctx.targetUrl?.trim() || undefined;
 		const rawStatus = ctx.state || ctx.conclusion;
 
 		let status: CheckItem["status"];
