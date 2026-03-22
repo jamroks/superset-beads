@@ -20,6 +20,7 @@ import {
 	getWorktree,
 	setLastActiveWorkspace,
 	touchWorkspace,
+	updateActiveWorkspaceIfRemoved,
 } from "../utils/db-helpers";
 import {
 	createWorktreeFromPr,
@@ -556,6 +557,7 @@ export const createCreateProcedures = () => {
 							// Rollback: Clean up DB records if side effects failed
 							if (workspaceId) {
 								try {
+									updateActiveWorkspaceIfRemoved(workspaceId);
 									localDb
 										.delete(workspaces)
 										.where(eq(workspaces.id, workspaceId))
