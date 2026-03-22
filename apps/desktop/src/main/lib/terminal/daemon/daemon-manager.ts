@@ -434,23 +434,6 @@ export class DaemonTerminalManager extends EventEmitter {
 				});
 			}
 
-			const daemonRequest = this.client.createOrAttach({
-				sessionId: paneId,
-				requestId: params.requestId,
-				paneId,
-				tabId,
-				workspaceId,
-				workspaceName,
-				workspacePath,
-				rootPath,
-				cols,
-				rows,
-				cwd,
-				env,
-				shell,
-				command,
-			});
-			daemonRequest.catch(() => {});
 			const cancelDaemonRequest = () => {
 				if (!params.requestId) return;
 				void this.client
@@ -458,14 +441,41 @@ export class DaemonTerminalManager extends EventEmitter {
 						sessionId: paneId,
 						requestId: params.requestId,
 					})
-					.catch(() => {});
+					.catch((error) => {
+						console.warn(
+							`[DaemonTerminalManager] Failed to cancel createOrAttach for ${paneId}:`,
+							error,
+						);
+					});
 			};
 			signal.addEventListener("abort", cancelDaemonRequest, { once: true });
+			throwIfAborted(signal);
+			const daemonRequest = this.client.createOrAttach(
+				{
+					sessionId: paneId,
+					requestId: params.requestId,
+					paneId,
+					tabId,
+					workspaceId,
+					workspaceName,
+					workspacePath,
+					rootPath,
+					cols,
+					rows,
+					cwd,
+					env,
+					shell,
+					command,
+				},
+				signal,
+			);
+			daemonRequest.catch(() => {});
 			const response = await raceWithAbort(daemonRequest, signal).finally(
 				() => {
 					signal.removeEventListener("abort", cancelDaemonRequest);
 				},
 			);
+			throwIfAborted(signal);
 
 			this.daemonAliveSessionIds.add(paneId);
 
@@ -896,7 +906,15 @@ export class DaemonTerminalManager extends EventEmitter {
 		}
 	}
 
+	private abortPendingSessions(): void {
+		for (const pending of this.pendingSessions.values()) {
+			pending.abortController.abort();
+		}
+		this.pendingSessions.clear();
+	}
+
 	async cleanup(): Promise<void> {
+		this.abortPendingSessions();
 		for (const timeout of this.cleanupTimeouts.values()) {
 			clearTimeout(timeout);
 		}
@@ -950,6 +968,7 @@ export class DaemonTerminalManager extends EventEmitter {
 	reset(): void {
 		console.log("[DaemonTerminalManager] Resetting...");
 
+		this.abortPendingSessions();
 		for (const timeout of this.cleanupTimeouts.values()) {
 			clearTimeout(timeout);
 		}
@@ -957,7 +976,6 @@ export class DaemonTerminalManager extends EventEmitter {
 		this.client.removeAllListeners();
 
 		this.sessions.clear();
-		this.pendingSessions.clear();
 		this.daemonAliveSessionIds.clear();
 		this.daemonSessionIdsHydrated = false;
 		this.coldRestoreInfo.clear();

@@ -28,6 +28,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { app } from "electron";
 import { SUPERSET_DIR_NAME } from "shared/constants";
+import { throwIfAborted } from "../terminal/abort";
+import { TerminalAttachCanceledError } from "../terminal/errors";
 import {
 	type CancelCreateOrAttachRequest,
 	type ClearScrollbackRequest,
@@ -171,6 +173,7 @@ export class TerminalHostClient extends EventEmitter {
 	private notifyDrainArmed = false;
 	private disconnectArmed = false;
 	private clientId = randomUUID();
+	private canceledCreateOrAttachKeys = new Set<string>();
 
 	constructor() {
 		super();
@@ -653,6 +656,7 @@ export class TerminalHostClient extends EventEmitter {
 		this.controlAuthenticated = false;
 		this.streamAuthenticated = false;
 		this.connectionState = ConnectionState.DISCONNECTED;
+		this.canceledCreateOrAttachKeys.clear();
 
 		this.notifyQueue = [];
 		this.notifyQueueBytes = 0;
@@ -1280,6 +1284,16 @@ export class TerminalHostClient extends EventEmitter {
 		}
 	}
 
+	private getCreateOrAttachKey({
+		sessionId,
+		requestId,
+	}: {
+		sessionId: string;
+		requestId: string;
+	}): string {
+		return `${sessionId}:${requestId}`;
+	}
+
 	// ===========================================================================
 	// Public API
 	// ===========================================================================
@@ -1289,8 +1303,22 @@ export class TerminalHostClient extends EventEmitter {
 	 */
 	async createOrAttach(
 		request: CreateOrAttachRequest,
+		signal?: AbortSignal,
 	): Promise<CreateOrAttachResponse> {
+		throwIfAborted(signal);
 		await this.ensureConnected();
+		throwIfAborted(signal);
+		if (
+			request.requestId &&
+			this.canceledCreateOrAttachKeys.delete(
+				this.getCreateOrAttachKey({
+					sessionId: request.sessionId,
+					requestId: request.requestId,
+				}),
+			)
+		) {
+			throw new TerminalAttachCanceledError();
+		}
 		const response = await this.sendRequest<CreateOrAttachResponse>(
 			"createOrAttach",
 			request,
@@ -1306,6 +1334,9 @@ export class TerminalHostClient extends EventEmitter {
 	async cancelCreateOrAttach(
 		request: CancelCreateOrAttachRequest,
 	): Promise<EmptyResponse> {
+		if (this.connectionState === ConnectionState.CONNECTING) {
+			this.canceledCreateOrAttachKeys.add(this.getCreateOrAttachKey(request));
+		}
 		if (
 			this.connectionState !== ConnectionState.CONNECTED ||
 			!this.controlSocket ||

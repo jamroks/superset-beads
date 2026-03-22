@@ -32,6 +32,7 @@ import type {
 	TerminalWriteMutate,
 } from "../types";
 import { scrollToBottom } from "../utils";
+import { createAttachRequestId } from "./attach-request-id";
 import {
 	getPaneWorkspaceRun,
 	hasPaneWorkspaceRun,
@@ -299,7 +300,7 @@ export function useTerminalLifecycle({
 			maybeApplyInitialState();
 		}, FIRST_RENDER_RESTORE_FALLBACK_MS);
 
-		const nextAttachRequestId = () => `${paneId}:${++attachSequence}`;
+		const nextAttachRequestId = () => createAttachRequestId(paneId);
 		const cancelAttachRequest = (requestId: string | null) => {
 			if (!requestId) return;
 			cancelCreateOrAttachRef.current({ paneId, requestId });
@@ -480,7 +481,7 @@ export function useTerminalLifecycle({
 					const requestId = nextAttachRequestId();
 					cancelAttachRequest(activeAttachRequestId);
 					activeAttachRequestId = requestId;
-					activeAttachId = attachSequence;
+					activeAttachId = ++attachSequence;
 					const attachId = activeAttachId;
 					const isAttachActive = () =>
 						!isUnmounted && !attachCanceled && attachId === activeAttachId;

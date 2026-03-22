@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { EventEmitter } from "node:events";
-import { TERMINAL_ATTACH_CANCELED_MESSAGE } from "../errors";
+import {
+	TERMINAL_ATTACH_CANCELED_MESSAGE,
+	TerminalAttachCanceledError,
+} from "../errors";
 import type { SessionInfo } from "./types";
 
 class MockTerminalHostClient extends EventEmitter {
@@ -28,12 +31,41 @@ class MockTerminalHostClient extends EventEmitter {
 			reject: (error: Error) => void;
 		}
 	>();
+	private createOrAttachGate: {
+		promise: Promise<void>;
+		release: () => void;
+	} | null = null;
+
+	blockCreateOrAttach() {
+		if (this.createOrAttachGate) {
+			throw new Error("createOrAttach is already blocked");
+		}
+		let release!: () => void;
+		const promise = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		this.createOrAttachGate = { promise, release };
+	}
+
+	releaseCreateOrAttach() {
+		this.createOrAttachGate?.release();
+		this.createOrAttachGate = null;
+	}
 
 	async kill(params: { sessionId: string; deleteHistory?: boolean }) {
 		this.killCalls.push(params);
 	}
 
-	async createOrAttach(params: { sessionId: string; requestId?: string }) {
+	async createOrAttach(
+		params: { sessionId: string; requestId?: string },
+		signal?: AbortSignal,
+	) {
+		if (this.createOrAttachGate) {
+			await this.createOrAttachGate.promise;
+		}
+		if (signal?.aborted) {
+			throw new TerminalAttachCanceledError();
+		}
 		this.createOrAttachCalls.push(params);
 		return new Promise<{
 			isNew: boolean;
@@ -155,11 +187,15 @@ mock.module("./history-manager", () => ({
 		cleanupHistory() {
 			return Promise.resolve();
 		}
+		cleanup() {
+			return Promise.resolve();
+		}
 		initHistoryWriter() {
 			return Promise.resolve();
 		}
 		writeToHistory() {}
 		closeHistoryWriter() {}
+		closeAllSync() {}
 		reset() {
 			return Promise.resolve();
 		}
@@ -280,5 +316,69 @@ describe("DaemonTerminalManager kill tracking", () => {
 			{ sessionId: paneId, requestId: "req-1" },
 			{ sessionId: paneId, requestId: "req-2" },
 		]);
+	});
+
+	it("does not dispatch stale daemon work after canceling before dispatch", async () => {
+		const manager = new DaemonTerminalManager();
+		const paneId = "pane-attach-blocked";
+		const managerInternals = manager as unknown as {
+			daemonSessionIdsHydrated: boolean;
+			daemonAliveSessionIds: Set<string>;
+		};
+		managerInternals.daemonSessionIdsHydrated = true;
+		managerInternals.daemonAliveSessionIds = new Set([paneId]);
+		mockClient.blockCreateOrAttach();
+
+		const attachPromise = manager.createOrAttach({
+			paneId,
+			requestId: "req-blocked",
+			tabId: "tab-1",
+			workspaceId: "ws-1",
+			skipColdRestore: true,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		manager.cancelCreateOrAttach({ paneId, requestId: "req-blocked" });
+		await expect(attachPromise).rejects.toThrow(
+			TERMINAL_ATTACH_CANCELED_MESSAGE,
+		);
+
+		mockClient.releaseCreateOrAttach();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(mockClient.createOrAttachCalls).toEqual([]);
+	});
+
+	it("aborts pending attaches during reset", async () => {
+		const manager = new DaemonTerminalManager();
+		const paneId = "pane-reset-attach";
+		const managerInternals = manager as unknown as {
+			daemonSessionIdsHydrated: boolean;
+			daemonAliveSessionIds: Set<string>;
+			sessions: Map<string, SessionInfo>;
+		};
+		managerInternals.daemonSessionIdsHydrated = true;
+		managerInternals.daemonAliveSessionIds = new Set([paneId]);
+		mockClient.blockCreateOrAttach();
+
+		const attachPromise = manager.createOrAttach({
+			paneId,
+			requestId: "req-reset",
+			tabId: "tab-1",
+			workspaceId: "ws-1",
+			skipColdRestore: true,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		manager.reset();
+		await expect(attachPromise).rejects.toThrow(
+			TERMINAL_ATTACH_CANCELED_MESSAGE,
+		);
+
+		mockClient.releaseCreateOrAttach();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(managerInternals.sessions.size).toBe(0);
+		expect(managerInternals.daemonAliveSessionIds.has(paneId)).toBe(false);
 	});
 });
