@@ -32,6 +32,10 @@ export function ProjectTargetingField({
 	onChange,
 }: ProjectTargetingFieldProps) {
 	const [open, setOpen] = useState(false);
+	const radioItemClassName =
+		"border-border bg-transparent text-foreground shadow-none dark:bg-transparent data-[state=checked]:border-foreground data-[state=checked]:bg-transparent data-[state=checked]:text-foreground dark:data-[state=checked]:bg-transparent focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foreground/10 [&_svg]:fill-current";
+	const triggerButtonClassName =
+		"h-9 w-full justify-between border-border/70 bg-transparent shadow-none hover:bg-accent/40 focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foreground/10 dark:bg-transparent";
 	const projectOptionsById = useMemo(
 		() => new Map(projects.map((project) => [project.id, project])),
 		[projects],
@@ -92,7 +96,11 @@ export function ProjectTargetingField({
 				className="gap-3"
 			>
 				<div className="flex items-start gap-2">
-					<RadioGroupItem value="all" id="preset-project-scope-all" />
+					<RadioGroupItem
+						value="all"
+						id="preset-project-scope-all"
+						className={radioItemClassName}
+					/>
 					<div className="space-y-0.5">
 						<label
 							htmlFor="preset-project-scope-all"
@@ -110,6 +118,7 @@ export function ProjectTargetingField({
 						value="projects"
 						id="preset-project-scope-specific"
 						disabled={projects.length === 0}
+						className={radioItemClassName}
 					/>
 					<div className="min-w-0 flex-1 space-y-2">
 						<div className="space-y-0.5">
@@ -131,7 +140,7 @@ export function ProjectTargetingField({
 										<Button
 											type="button"
 											variant="outline"
-											className="w-full justify-between"
+											className={triggerButtonClassName}
 											disabled={projects.length === 0}
 										>
 											<span className="truncate">{buttonLabel}</span>

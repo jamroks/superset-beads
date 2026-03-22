@@ -94,6 +94,10 @@ export function PresetEditorSheet({
 }: PresetEditorSheetProps) {
 	const singleCommandModeValue =
 		modeValue === "split-pane" ? modeValue : "new-tab";
+	const fieldClassName =
+		"border-border/70 bg-transparent shadow-none dark:bg-transparent focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foreground/10";
+	const neutralSelectionControlClassName =
+		"border-border bg-transparent text-foreground shadow-none dark:bg-transparent data-[state=checked]:border-foreground data-[state=checked]:bg-transparent data-[state=checked]:text-foreground dark:data-[state=checked]:bg-transparent focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foreground/10 [&_svg]:fill-current";
 	const selectDirectory = electronTrpc.window.selectDirectory.useMutation();
 	const originRoute = useSettingsOriginRoute();
 	const trimmedCwd = preset?.cwd.trim() ?? "";
@@ -162,6 +166,7 @@ export function PresetEditorSheet({
 									value={preset.name}
 									onChange={(e) => onFieldChange("name", e.target.value)}
 									onBlur={() => onFieldBlur("name")}
+									className={fieldClassName}
 									placeholder="e.g. Dev Server"
 								/>
 							</div>
@@ -176,15 +181,13 @@ export function PresetEditorSheet({
 									value={preset.description ?? ""}
 									onChange={(e) => onFieldChange("description", e.target.value)}
 									onBlur={() => onFieldBlur("description")}
+									className={fieldClassName}
 									placeholder="e.g. Starts the dev server (optional)"
 								/>
 							</div>
 
 							<div className="space-y-2">
-								<LabelWithTooltip
-									label="Applies To"
-									tooltip="Choose whether this preset is available everywhere or only in specific projects."
-								/>
+								<LabelWithTooltip label="Applies To" />
 								<ProjectTargetingField
 									projectIds={preset.projectIds}
 									projects={projects}
@@ -204,6 +207,7 @@ export function PresetEditorSheet({
 										value={preset.cwd}
 										onChange={(e) => onFieldChange("cwd", e.target.value)}
 										onBlur={() => onFieldBlur("cwd")}
+										className={fieldClassName}
 										placeholder="e.g. ./apps/web or /full/path (optional)"
 									/>
 									<Button
@@ -212,6 +216,7 @@ export function PresetEditorSheet({
 										size="sm"
 										onClick={handleBrowseDirectory}
 										disabled={selectDirectory.isPending}
+										className="border-border/70 bg-transparent shadow-none hover:bg-accent/40 focus-visible:border-foreground/30 focus-visible:ring-2 focus-visible:ring-foreground/10 dark:bg-transparent"
 									>
 										<HiOutlineFolderOpen className="size-4" />
 										Browse
@@ -258,10 +263,7 @@ export function PresetEditorSheet({
 							</div>
 
 							<div className="space-y-2">
-								<LabelWithTooltip
-									label="Launch Mode"
-									tooltip="Controls whether commands open in the current tab, one new tab with panes, or one new tab per command."
-								/>
+								<LabelWithTooltip label="Launch Mode" />
 								{hasMultipleCommands ? (
 									<RadioGroup
 										value={modeValue}
@@ -274,7 +276,7 @@ export function PresetEditorSheet({
 											<RadioGroupItem
 												id="preset-multi-command-split-pane"
 												value="split-pane"
-												className="mt-0.5"
+												className={`${neutralSelectionControlClassName} mt-0.5`}
 											/>
 											<Label
 												htmlFor="preset-multi-command-split-pane"
@@ -287,7 +289,7 @@ export function PresetEditorSheet({
 											<RadioGroupItem
 												id="preset-multi-command-new-tab"
 												value="new-tab"
-												className="mt-0.5"
+												className={`${neutralSelectionControlClassName} mt-0.5`}
 											/>
 											<Label
 												htmlFor="preset-multi-command-new-tab"
@@ -300,7 +302,7 @@ export function PresetEditorSheet({
 											<RadioGroupItem
 												id="preset-multi-command-new-tab-split-pane"
 												value="new-tab-split-pane"
-												className="mt-0.5"
+												className={`${neutralSelectionControlClassName} mt-0.5`}
 											/>
 											<Label
 												htmlFor="preset-multi-command-new-tab-split-pane"
@@ -317,7 +319,7 @@ export function PresetEditorSheet({
 											onModeChange(value as ExecutionMode)
 										}
 									>
-										<SelectTrigger className="h-9 w-full">
+										<SelectTrigger className={`h-9 w-full ${fieldClassName}`}>
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
@@ -334,13 +336,13 @@ export function PresetEditorSheet({
 								<LabelWithTooltip
 									label="Auto-run"
 									className="text-sm font-medium"
-									tooltip="Choose when this preset should run automatically."
 								/>
 
 								<div className="flex items-start gap-3">
 									<Checkbox
 										id="preset-workspace-autostart"
 										checked={isWorkspaceCreation}
+										className={neutralSelectionControlClassName}
 										onCheckedChange={(checked) =>
 											onToggleAutoApply(
 												"applyOnWorkspaceCreated",
@@ -365,6 +367,7 @@ export function PresetEditorSheet({
 									<Checkbox
 										id="preset-tab-autostart"
 										checked={isNewTab}
+										className={neutralSelectionControlClassName}
 										onCheckedChange={(checked) =>
 											onToggleAutoApply("applyOnNewTab", checked === true)
 										}
@@ -387,9 +390,10 @@ export function PresetEditorSheet({
 						<SheetFooter className="border-t p-4 sm:flex-row sm:items-center sm:justify-between">
 							<Button
 								type="button"
-								variant="destructive"
+								variant="ghost"
 								size="sm"
 								onClick={onDeletePreset}
+								className="text-destructive hover:bg-destructive/10 hover:text-destructive"
 							>
 								Delete Preset
 							</Button>
@@ -397,6 +401,7 @@ export function PresetEditorSheet({
 								type="button"
 								size="sm"
 								onClick={() => onOpenChange(false)}
+								className="bg-foreground text-background hover:bg-foreground/90"
 							>
 								Done
 							</Button>
