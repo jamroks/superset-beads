@@ -34,12 +34,13 @@ mock.module("renderer/lib/trpc-client", () => ({
 
 const {
 	applyLoadedDocumentContent,
-	getEditorDocumentBaselineContent,
 	getEditorDocumentContentForSave,
 	getEditorDocumentCurrentContent,
+	getEditorDocumentLoadedContent,
 	markDocumentSaved,
-	registerDocumentRenderedMarkdownBaseline,
-	updateDocumentDraft,
+	registerRenderedMarkdownPristineContent,
+	updateRawDocumentDraft,
+	updateRenderedMarkdownDocumentDraft,
 } = await import("./editorCoordinator");
 
 const DOCUMENT_KEY = "workspace::working::README.md";
@@ -75,21 +76,21 @@ describe("editorCoordinator markdown representations", () => {
 
 	it("uses the rendered markdown baseline for rendered dirty checks only", () => {
 		applyLoadedDocumentContent(DOCUMENT_KEY, "hello", null);
-		registerDocumentRenderedMarkdownBaseline(DOCUMENT_KEY, "hello\n");
+		registerRenderedMarkdownPristineContent(DOCUMENT_KEY, "hello\n");
 
-		expect(getEditorDocumentBaselineContent(DOCUMENT_KEY)).toBe("hello");
-		expect(
-			updateDocumentDraft(DOCUMENT_KEY, "hello\n", "rendered-markdown"),
-		).toBe(false);
+		expect(getEditorDocumentLoadedContent(DOCUMENT_KEY)).toBe("hello");
+		expect(updateRenderedMarkdownDocumentDraft(DOCUMENT_KEY, "hello\n")).toBe(
+			false,
+		);
 		expect(getEditorDocumentCurrentContent(DOCUMENT_KEY)).toBe("hello\n");
 		expect(getEditorDocumentContentForSave(DOCUMENT_KEY)).toBe("hello");
-		expect(updateDocumentDraft(DOCUMENT_KEY, "hello\n", "raw")).toBe(true);
+		expect(updateRawDocumentDraft(DOCUMENT_KEY, "hello\n")).toBe(true);
 		expect(getEditorDocumentContentForSave(DOCUMENT_KEY)).toBe("hello\n");
 	});
 
 	it("clears the rendered markdown baseline after save/load transitions", () => {
 		applyLoadedDocumentContent(DOCUMENT_KEY, "hello", null);
-		registerDocumentRenderedMarkdownBaseline(DOCUMENT_KEY, "hello\n");
+		registerRenderedMarkdownPristineContent(DOCUMENT_KEY, "hello\n");
 
 		markDocumentSaved(DOCUMENT_KEY, {
 			savedContent: "updated",
@@ -97,15 +98,15 @@ describe("editorCoordinator markdown representations", () => {
 			revision: "rev-1",
 		});
 
-		expect(
-			updateDocumentDraft(DOCUMENT_KEY, "updated\n", "rendered-markdown"),
-		).toBe(true);
+		expect(updateRenderedMarkdownDocumentDraft(DOCUMENT_KEY, "updated\n")).toBe(
+			true,
+		);
 
 		applyLoadedDocumentContent(DOCUMENT_KEY, "fresh", null);
 
-		expect(
-			updateDocumentDraft(DOCUMENT_KEY, "fresh\n", "rendered-markdown"),
-		).toBe(true);
-		expect(getEditorDocumentBaselineContent(DOCUMENT_KEY)).toBe("fresh");
+		expect(updateRenderedMarkdownDocumentDraft(DOCUMENT_KEY, "fresh\n")).toBe(
+			true,
+		);
+		expect(getEditorDocumentLoadedContent(DOCUMENT_KEY)).toBe("fresh");
 	});
 });

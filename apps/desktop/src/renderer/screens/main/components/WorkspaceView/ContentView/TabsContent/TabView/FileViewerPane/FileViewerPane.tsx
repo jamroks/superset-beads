@@ -14,18 +14,19 @@ import {
 	cancelPendingIntent,
 	clearDocumentConflict,
 	discardDocumentChanges,
-	getEditorDocumentBaselineContent,
 	getEditorDocumentContentForSave,
 	getEditorDocumentCurrentContent,
+	getEditorDocumentLoadedContent,
 	hasEditorDocumentInitialized,
 	markDocumentSaved,
-	registerDocumentRenderedMarkdownBaseline,
+	registerRenderedMarkdownPristineContent,
 	requestPaneClose,
 	requestViewModeChange,
 	resumePendingIntent,
 	setDocumentConflict,
 	setDocumentExternalDiskChange,
-	updateDocumentDraft,
+	updateRawDocumentDraft,
+	updateRenderedMarkdownDocumentDraft,
 } from "renderer/stores/editor-state/editorCoordinator";
 import {
 	buildEditorDocumentKey,
@@ -325,17 +326,17 @@ export function FileViewerPane({
 		() => toAbsoluteWorkspacePath(worktreePath, filePath),
 		[worktreePath, filePath],
 	);
-	const baselineContent = getEditorDocumentBaselineContent(documentKey);
+	const loadedContent = getEditorDocumentLoadedContent(documentKey);
 
 	useEffect(() => {
 		const nextHasExternalDiskChange =
 			isDirty &&
 			viewMode !== "diff" &&
-			((rawFileData?.ok === true && rawFileData.content !== baselineContent) ||
+			((rawFileData?.ok === true && rawFileData.content !== loadedContent) ||
 				(rawFileData?.ok === false && rawFileData.reason === "not-found"));
 
 		setDocumentExternalDiskChange(documentKey, nextHasExternalDiskChange);
-	}, [baselineContent, documentKey, isDirty, rawFileData, viewMode]);
+	}, [documentKey, isDirty, loadedContent, rawFileData, viewMode]);
 
 	const trpcUtils = electronTrpc.useUtils();
 	const invalidateCurrentFile = useCallback(() => {
@@ -390,11 +391,10 @@ export function FileViewerPane({
 				return;
 			}
 
-			const dirty = updateDocumentDraft(
-				documentKey,
-				value,
-				viewMode === "rendered" ? "rendered-markdown" : "raw",
-			);
+			const dirty =
+				viewMode === "rendered"
+					? updateRenderedMarkdownDocumentDraft(documentKey, value)
+					: updateRawDocumentDraft(documentKey, value);
 			if (dirty && !isPinned) {
 				pinPane(paneId);
 				useEditorSessionsStore.getState().patchSession(paneId, {
@@ -411,7 +411,7 @@ export function FileViewerPane({
 				return;
 			}
 
-			registerDocumentRenderedMarkdownBaseline(documentKey, value);
+			registerRenderedMarkdownPristineContent(documentKey, value);
 		},
 		[documentKey, isDirty],
 	);
@@ -596,7 +596,7 @@ export function FileViewerPane({
 				return currentDocumentContent;
 			}
 
-			return isDirty ? currentDocumentContent : baselineContent;
+			return isDirty ? currentDocumentContent : loadedContent;
 		}
 
 		if (rawFileData?.ok === true) {
@@ -605,10 +605,10 @@ export function FileViewerPane({
 
 		return "";
 	}, [
-		baselineContent,
 		currentDocumentContent,
 		documentKey,
 		isDirty,
+		loadedContent,
 		rawFileData,
 		viewMode,
 	]);

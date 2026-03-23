@@ -1,8 +1,6 @@
-import type { EditorContentRepresentation } from "./types";
-
 interface EditorBufferEntry {
-	baselineContent: string;
-	renderedMarkdownBaselineContent: string | null;
+	loadedContent: string;
+	renderedMarkdownPristineContent: string | null;
 	currentContent: string;
 	initialized: boolean;
 }
@@ -16,8 +14,8 @@ function ensureBuffer(documentKey: string): EditorBufferEntry {
 	}
 
 	const created: EditorBufferEntry = {
-		baselineContent: "",
-		renderedMarkdownBaselineContent: null,
+		loadedContent: "",
+		renderedMarkdownPristineContent: null,
 		currentContent: "",
 		initialized: false,
 	};
@@ -29,28 +27,20 @@ export function hasDocumentBuffer(documentKey: string): boolean {
 	return documentBuffers.has(documentKey);
 }
 
-export function getDocumentBaselineContent(documentKey: string): string {
-	return documentBuffers.get(documentKey)?.baselineContent ?? "";
+export function getDocumentLoadedContent(documentKey: string): string {
+	return documentBuffers.get(documentKey)?.loadedContent ?? "";
 }
 
 export function getDocumentCurrentContent(documentKey: string): string {
 	return documentBuffers.get(documentKey)?.currentContent ?? "";
 }
 
-export function getDocumentComparisonBaselineContent(
+export function getDocumentRenderedMarkdownPristineContent(
 	documentKey: string,
-	representation: EditorContentRepresentation,
-): string {
-	const entry = documentBuffers.get(documentKey);
-	if (!entry) {
-		return "";
-	}
-
-	if (representation === "rendered-markdown") {
-		return entry.renderedMarkdownBaselineContent ?? entry.baselineContent;
-	}
-
-	return entry.baselineContent;
+): string | null {
+	return (
+		documentBuffers.get(documentKey)?.renderedMarkdownPristineContent ?? null
+	);
 }
 
 export function hasInitializedDocumentBuffer(documentKey: string): boolean {
@@ -62,8 +52,8 @@ export function setDocumentLoadedContent(
 	content: string,
 ): void {
 	const entry = ensureBuffer(documentKey);
-	entry.baselineContent = content;
-	entry.renderedMarkdownBaselineContent = null;
+	entry.loadedContent = content;
+	entry.renderedMarkdownPristineContent = null;
 	entry.currentContent = content;
 	entry.initialized = true;
 }
@@ -74,24 +64,24 @@ export function setDocumentCurrentContent(
 ): void {
 	const entry = ensureBuffer(documentKey);
 	if (!entry.initialized) {
-		entry.baselineContent = content;
-		entry.renderedMarkdownBaselineContent = null;
+		entry.loadedContent = content;
+		entry.renderedMarkdownPristineContent = null;
 		entry.initialized = true;
 	}
 	entry.currentContent = content;
 }
 
-export function setDocumentRenderedMarkdownBaselineContent(
+export function setDocumentRenderedMarkdownPristineContent(
 	documentKey: string,
 	content: string,
 ): void {
 	const entry = ensureBuffer(documentKey);
 	if (!entry.initialized) {
-		entry.baselineContent = content;
+		entry.loadedContent = content;
 		entry.currentContent = content;
 		entry.initialized = true;
 	}
-	entry.renderedMarkdownBaselineContent = content;
+	entry.renderedMarkdownPristineContent = content;
 }
 
 export function markDocumentSavedContent(
@@ -100,15 +90,15 @@ export function markDocumentSavedContent(
 	currentContent: string,
 ): void {
 	const entry = ensureBuffer(documentKey);
-	entry.baselineContent = savedContent;
-	entry.renderedMarkdownBaselineContent = null;
+	entry.loadedContent = savedContent;
+	entry.renderedMarkdownPristineContent = null;
 	entry.currentContent = currentContent;
 	entry.initialized = true;
 }
 
 export function discardDocumentCurrentContent(documentKey: string): string {
 	const entry = ensureBuffer(documentKey);
-	entry.currentContent = entry.baselineContent;
+	entry.currentContent = entry.loadedContent;
 	return entry.currentContent;
 }
 

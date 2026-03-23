@@ -7,19 +7,18 @@ import { getPathBaseName } from "shared/absolute-paths";
 import {
 	deleteDocumentBuffer,
 	discardDocumentCurrentContent,
-	getDocumentBaselineContent,
-	getDocumentComparisonBaselineContent,
 	getDocumentCurrentContent,
+	getDocumentLoadedContent,
+	getDocumentRenderedMarkdownPristineContent,
 	hasInitializedDocumentBuffer,
 	markDocumentSavedContent,
 	setDocumentCurrentContent,
 	setDocumentLoadedContent,
-	setDocumentRenderedMarkdownBaselineContent,
+	setDocumentRenderedMarkdownPristineContent,
 	transferDocumentBuffer,
 } from "./editorBufferRegistry";
 import {
 	buildEditorDocumentKey,
-	type EditorContentRepresentation,
 	type EditorDocumentState,
 	type EditorPendingIntent,
 	type EditorSaveResult,
@@ -275,17 +274,13 @@ export function unbindFileViewerSession(paneId: string): void {
 	cleanupDocumentIfOrphaned(session.documentKey);
 }
 
-export function updateDocumentDraft(
+function updateDocumentDraftState(
 	documentKey: string,
 	content: string,
-	representation: EditorContentRepresentation = "raw",
+	pristineContent: string,
 ): boolean {
 	setDocumentCurrentContent(documentKey, content);
-	const baseline = getDocumentComparisonBaselineContent(
-		documentKey,
-		representation,
-	);
-	const dirty = content !== baseline;
+	const dirty = content !== pristineContent;
 
 	useEditorDocumentsStore.getState().patchDocument(documentKey, {
 		dirty,
@@ -296,11 +291,34 @@ export function updateDocumentDraft(
 	return dirty;
 }
 
-export function registerDocumentRenderedMarkdownBaseline(
+export function updateRawDocumentDraft(
+	documentKey: string,
+	content: string,
+): boolean {
+	return updateDocumentDraftState(
+		documentKey,
+		content,
+		getDocumentLoadedContent(documentKey),
+	);
+}
+
+export function updateRenderedMarkdownDocumentDraft(
+	documentKey: string,
+	content: string,
+): boolean {
+	return updateDocumentDraftState(
+		documentKey,
+		content,
+		getDocumentRenderedMarkdownPristineContent(documentKey) ??
+			getDocumentLoadedContent(documentKey),
+	);
+}
+
+export function registerRenderedMarkdownPristineContent(
 	documentKey: string,
 	content: string,
 ): void {
-	setDocumentRenderedMarkdownBaselineContent(documentKey, content);
+	setDocumentRenderedMarkdownPristineContent(documentKey, content);
 }
 
 export function applyLoadedDocumentContent(
@@ -409,14 +427,14 @@ export function getEditorDocumentCurrentContent(documentKey: string): string {
 
 export function getEditorDocumentContentForSave(documentKey: string): string {
 	if (!getDocumentState(documentKey)?.dirty) {
-		return getDocumentBaselineContent(documentKey);
+		return getDocumentLoadedContent(documentKey);
 	}
 
 	return getDocumentCurrentContent(documentKey);
 }
 
-export function getEditorDocumentBaselineContent(documentKey: string): string {
-	return getDocumentBaselineContent(documentKey);
+export function getEditorDocumentLoadedContent(documentKey: string): string {
+	return getDocumentLoadedContent(documentKey);
 }
 
 export function hasEditorDocumentInitialized(documentKey: string): boolean {

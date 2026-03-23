@@ -6,8 +6,6 @@ export type EditorDocumentStatus = "loading" | "ready" | "saving" | "conflict";
 
 export type EditorDialogState = "none" | "unsaved" | "conflict";
 
-export type EditorContentRepresentation = "raw" | "rendered-markdown";
-
 export interface EditorDocumentState {
 	documentKey: string;
 	workspaceId: string;
