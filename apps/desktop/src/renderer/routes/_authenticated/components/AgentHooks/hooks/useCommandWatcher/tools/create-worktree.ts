@@ -42,7 +42,6 @@ async function execute(
 
 	for (const [i, input] of params.workspaces.entries()) {
 		try {
-			let baseBranch = input.baseBranch;
 			if (input.sourceWorkspaceId) {
 				const workspaces = ctx.getWorkspaces();
 				const sourceWorkspace = workspaces?.find(
@@ -57,14 +56,14 @@ async function execute(
 					});
 					continue;
 				}
-				baseBranch = sourceWorkspace.branch;
 			}
 
 			const result = await ctx.createWorktree.mutateAsync({
 				projectId,
 				name: input.name,
 				branchName: input.branchName,
-				baseBranch,
+				baseBranch: input.baseBranch,
+				sourceWorkspaceId: input.sourceWorkspaceId,
 			});
 
 			created.push({

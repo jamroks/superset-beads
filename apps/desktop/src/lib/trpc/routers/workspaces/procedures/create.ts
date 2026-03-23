@@ -16,6 +16,7 @@ import {
 	getBranchWorkspace,
 	getMaxProjectChildTabOrder,
 	getProject,
+	getWorkspace,
 	getWorktree,
 	setLastActiveWorkspace,
 	touchWorkspace,
@@ -259,15 +260,28 @@ export const createCreateProcedures = () => {
 	return router({
 		create: publicProcedure
 			.input(
-				z.object({
-					projectId: z.string(),
-					name: z.string().optional(),
-					prompt: z.string().optional(),
-					branchName: z.string().optional(),
-					baseBranch: z.string().optional(),
-					useExistingBranch: z.boolean().optional(),
-					applyPrefix: z.boolean().optional().default(true),
-				}),
+				z
+					.object({
+						projectId: z.string(),
+						name: z.string().optional(),
+						prompt: z.string().optional(),
+						branchName: z.string().optional(),
+						baseBranch: z.string().optional(),
+						sourceWorkspaceId: z.string().optional(),
+						useExistingBranch: z.boolean().optional(),
+						applyPrefix: z.boolean().optional().default(true),
+					})
+					.refine((data) => !(data.baseBranch && data.sourceWorkspaceId), {
+						message:
+							"Cannot specify both baseBranch and sourceWorkspaceId. Use one or the other.",
+					})
+					.refine(
+						(data) => !(data.useExistingBranch && data.sourceWorkspaceId),
+						{
+							message:
+								"Cannot specify both useExistingBranch and sourceWorkspaceId.",
+						},
+					),
 			)
 			.mutation(async ({ input }) => {
 				const project = localDb
@@ -277,6 +291,27 @@ export const createCreateProcedures = () => {
 					.get();
 				if (!project) {
 					throw new Error(`Project ${input.projectId} not found`);
+				}
+
+				const sourceWorkspace = input.sourceWorkspaceId
+					? getWorkspace(input.sourceWorkspaceId)
+					: undefined;
+				if (input.sourceWorkspaceId && !sourceWorkspace) {
+					throw new Error(
+						`Source workspace "${input.sourceWorkspaceId}" not found`,
+					);
+				}
+				if (sourceWorkspace && sourceWorkspace.projectId !== input.projectId) {
+					throw new Error("Source workspace must belong to the same project");
+				}
+
+				const sourceWorktree = sourceWorkspace?.worktreeId
+					? getWorktree(sourceWorkspace.worktreeId)
+					: undefined;
+				if (sourceWorkspace && !sourceWorktree) {
+					throw new Error(
+						`Source workspace "${sourceWorkspace.id}" is not backed by a worktree`,
+					);
 				}
 
 				let existingBranchName: string | undefined;
@@ -419,7 +454,8 @@ export const createCreateProcedures = () => {
 
 				const targetBranch = resolveWorkspaceBaseBranch({
 					explicitBaseBranch: input.baseBranch,
-					workspaceBaseBranch: project.workspaceBaseBranch,
+					workspaceBaseBranch:
+						sourceWorktree?.baseBranch ?? project.workspaceBaseBranch,
 					defaultBranch: project.defaultBranch,
 					knownBranches: existingBranches,
 				});
@@ -479,6 +515,7 @@ export const createCreateProcedures = () => {
 					worktreePath,
 					branch,
 					mainRepoPath: project.mainRepoPath,
+					startPointBranch: sourceWorkspace?.branch,
 					namingPrompt: input.prompt,
 					useExistingBranch: input.useExistingBranch,
 				});
