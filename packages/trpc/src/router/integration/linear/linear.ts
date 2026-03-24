@@ -11,11 +11,16 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure } from "../../../trpc";
 import { verifyOrgAdmin, verifyOrgMembership } from "../utils";
-import { getLinearClient } from "./utils";
+import { getLinearClient, getLinearReconnectStatus } from "./utils";
 
 export const linearRouter = {
 	getConnection: protectedProcedure
-		.input(z.object({ organizationId: z.uuid() }))
+		.input(
+			z.object({
+				organizationId: z.uuid(),
+				includeHealth: z.boolean().optional(),
+			}),
+		)
 		.query(async ({ ctx, input }) => {
 			await verifyOrgMembership(ctx.session.user.id, input.organizationId);
 			const connection = await db.query.integrationConnections.findFirst({
@@ -26,7 +31,16 @@ export const linearRouter = {
 				columns: { id: true, config: true },
 			});
 			if (!connection) return null;
-			return { config: connection.config as LinearConfig | null };
+
+			const reconnectStatus = input.includeHealth
+				? await getLinearReconnectStatus(input.organizationId)
+				: { needsReconnect: false as const };
+
+			return {
+				config: connection.config as LinearConfig | null,
+				needsReconnect: reconnectStatus.needsReconnect,
+				reconnectReason: reconnectStatus.reconnectReason,
+			};
 		}),
 
 	disconnect: protectedProcedure

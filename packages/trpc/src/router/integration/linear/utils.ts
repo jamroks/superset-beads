@@ -8,11 +8,34 @@ import { and, eq } from "drizzle-orm";
 import { env } from "../../../env";
 
 const LINEAR_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const LINEAR_WEBHOOK_URL = `${env.NEXT_PUBLIC_API_URL}/api/integrations/linear/webhook`;
+
+const EXISTING_WEBHOOKS_QUERY = `
+	query ExistingWebhooks {
+		webhooks {
+			nodes {
+				id
+				url
+				enabled
+			}
+		}
+	}
+`;
 
 interface LinearTokenResponse {
 	access_token: string;
 	expires_in?: number;
 	refresh_token?: string;
+}
+
+interface ExistingWebhooksResponse {
+	webhooks: {
+		nodes: Array<{
+			id: string;
+			url: string;
+			enabled: boolean;
+		}>;
+	};
 }
 
 type Priority = "urgent" | "high" | "medium" | "low" | "none";
@@ -124,4 +147,42 @@ export async function getLinearClient(
 	}
 
 	return new LinearClient({ accessToken: connection.accessToken });
+}
+
+export async function getLinearReconnectStatus(
+	organizationId: string,
+): Promise<{
+	needsReconnect: boolean;
+	reconnectReason?: "missing_webhook" | "reauth_required";
+}> {
+	const client = await getLinearClient(organizationId);
+
+	if (!client) {
+		return { needsReconnect: false };
+	}
+
+	try {
+		const response = await client.client.request<
+			ExistingWebhooksResponse,
+			Record<string, never>
+		>(EXISTING_WEBHOOKS_QUERY);
+
+		const hasMatchingWebhook = response.webhooks.nodes.some(
+			(webhook) => webhook.enabled && webhook.url === LINEAR_WEBHOOK_URL,
+		);
+
+		if (!hasMatchingWebhook) {
+			return {
+				needsReconnect: true,
+				reconnectReason: "missing_webhook",
+			};
+		}
+
+		return { needsReconnect: false };
+	} catch {
+		return {
+			needsReconnect: true,
+			reconnectReason: "reauth_required",
+		};
+	}
 }

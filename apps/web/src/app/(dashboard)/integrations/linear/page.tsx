@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@superset/ui/alert";
 import { Badge } from "@superset/ui/badge";
 import {
 	Card,
@@ -6,7 +7,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@superset/ui/card";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { SiLinear } from "react-icons/si";
 import { api } from "@/trpc/server";
@@ -30,6 +31,7 @@ export default async function LinearIntegrationPage() {
 
 	const connection = await trpc.integration.linear.getConnection.query({
 		organizationId: organization.id,
+		includeHealth: true,
 	});
 	const isConnected = !!connection;
 
@@ -75,10 +77,28 @@ export default async function LinearIntegrationPage() {
 						Connect your Linear workspace to sync issues bidirectionally.
 					</CardDescription>
 				</CardHeader>
-				<CardContent>
+				<CardContent className="space-y-4">
+					{connection?.needsReconnect ? (
+						<Alert>
+							<AlertTriangle className="size-4" />
+							<AlertTitle>Reconnect Linear to restore live sync</AlertTitle>
+							<AlertDescription>
+								<p>
+									{connection.reconnectReason === "missing_webhook"
+										? "We could not find an active Linear webhook for this organization."
+										: "This connection needs to be re-authorized so Superset can verify and repair the webhook setup."}
+								</p>
+								<p>
+									Reconnect without disconnecting to refresh the OAuth grant and
+									re-enable continuous sync into task views.
+								</p>
+							</AlertDescription>
+						</Alert>
+					) : null}
 					<ConnectionControls
 						organizationId={organization.id}
 						isConnected={isConnected}
+						showReconnect={connection?.needsReconnect ?? false}
 					/>
 				</CardContent>
 			</Card>

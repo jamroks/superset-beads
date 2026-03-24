@@ -21,11 +21,13 @@ import { useTRPC } from "@/trpc/react";
 interface ConnectionControlsProps {
 	organizationId: string;
 	isConnected: boolean;
+	showReconnect?: boolean;
 }
 
 export function ConnectionControls({
 	organizationId,
 	isConnected,
+	showReconnect = false,
 }: ConnectionControlsProps) {
 	const trpc = useTRPC();
 	const router = useRouter();
@@ -54,29 +56,34 @@ export function ConnectionControls({
 
 	if (isConnected) {
 		return (
-			<AlertDialog>
-				<AlertDialogTrigger asChild>
-					<Button variant="outline" disabled={disconnectMutation.isPending}>
-						<Unplug className="mr-2 size-4" />
-						{disconnectMutation.isPending ? "Disconnecting..." : "Disconnect"}
-					</Button>
-				</AlertDialogTrigger>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Disconnect Linear?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will remove the connection between your organization and
-							Linear. You can reconnect at any time.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction onClick={handleDisconnect}>
-							Disconnect
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+			<div className="flex flex-wrap items-center gap-3">
+				{showReconnect ? (
+					<Button onClick={handleConnect}>Reconnect Linear</Button>
+				) : null}
+				<AlertDialog>
+					<AlertDialogTrigger asChild>
+						<Button variant="outline" disabled={disconnectMutation.isPending}>
+							<Unplug className="mr-2 size-4" />
+							{disconnectMutation.isPending ? "Disconnecting..." : "Disconnect"}
+						</Button>
+					</AlertDialogTrigger>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Disconnect Linear?</AlertDialogTitle>
+							<AlertDialogDescription>
+								This will remove the connection between your organization and
+								Linear. You can reconnect at any time.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogAction onClick={handleDisconnect}>
+								Disconnect
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+			</div>
 		);
 	}
 
