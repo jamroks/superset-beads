@@ -160,9 +160,12 @@
             const resultId = 'test1-result';
             displayResult(resultId, '⏳ Testing...', 'warning');
 
+            let foundService = false;
+
             for (const port of PORTS) {
                 try {
                     const response = await fetch(`http://127.0.0.1:${port}/trpc/github.getUser`);
+                    foundService = true; // If we got a response, service is running
 
                     if (response.status === 401) {
                         displayResult(resultId,
@@ -180,21 +183,15 @@
                         );
                         return;
                     }
-                } catch (err) {
-                    // CORS error or network error (expected)
-                    if (err.message.includes('CORS') || err.message.includes('Failed to fetch')) {
-                        displayResult(resultId,
-                            `✅ PROTECTED: CORS blocked the request (correct behavior)\n${err.message}`,
-                            'success'
-                        );
-                        return;
-                    }
+                } catch (_err) {
                 }
             }
 
             displayResult(resultId,
-                '⚠️ No host-service found running on common ports',
-                'warning'
+                foundService
+                    ? '❌ Service found but no 401 response - authentication may not be working'
+                    : '⚠️ No host-service found running on common ports',
+                foundService ? 'error' : 'warning'
             );
         }
 
@@ -217,15 +214,14 @@
                     try {
                         const response = await fetch(`http://127.0.0.1:${port}${endpoint}`);
 
+                        // Only count actual responses, not network failures
                         if (response.status === 401) {
                             blocked++;
                         } else if (response.ok) {
                             vulnerable++;
                             results.push(`❌ ${endpoint} exposed on port ${port}`);
                         }
-                    } catch (err) {
-                        // CORS or network error (good)
-                        blocked++;
+                    } catch (_err) {
                     }
                 }
             }
@@ -237,7 +233,7 @@
                 );
             } else if (blocked > 0) {
                 displayResult(resultId,
-                    `✅ ALL EXFILTRATION ATTEMPTS BLOCKED\nTested ${blocked} endpoint combinations`,
+                    `✅ ALL EXFILTRATION ATTEMPTS BLOCKED\nReceived 401 on ${blocked} endpoint combinations`,
                     'success'
                 );
             } else {
@@ -271,6 +267,8 @@
                 }
             ];
 
+            let foundService = false;
+
             for (const port of PORTS) {
                 for (const endpoint of destructiveEndpoints) {
                     try {
@@ -279,6 +277,8 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: endpoint.body
                         });
+
+                        foundService = true; // Got a response
 
                         if (response.status === 401) {
                             displayResult(resultId,
@@ -295,22 +295,16 @@
                             );
                             return;
                         }
-                    } catch (err) {
-                        // CORS or network error (expected)
-                        if (err.message.includes('CORS') || err.message.includes('Failed to fetch')) {
-                            displayResult(resultId,
-                                `✅ PROTECTED: CORS blocked destructive operation`,
-                                'success'
-                            );
-                            return;
-                        }
+                    } catch (_err) {
                     }
                 }
             }
 
             displayResult(resultId,
-                '⚠️ No host-service found running',
-                'warning'
+                foundService
+                    ? '❌ Service found but no 401 response - authentication may not be working'
+                    : '⚠️ No host-service found running',
+                foundService ? 'error' : 'warning'
             );
         }
 
@@ -335,7 +329,7 @@
                         status: response.status,
                         authenticated: response.status === 401
                     });
-                } catch (err) {
+                } catch (_err) {
                     // Port not responding or blocked
                 }
             }
