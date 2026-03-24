@@ -34,7 +34,10 @@ export const acceptInvitationEndpoint = {
 
 				if (!verification || new Date() > new Date(verification.expiresAt)) {
 					console.log("[invitation/accept] ERROR - Invalid or expired token");
-					throw new Error("Invalid or expired token");
+					return ctx.json(
+						{ error: "This invitation link is invalid or has expired." },
+						{ status: 400 },
+					);
 				}
 
 				// 2. Get invitation to verify email matches
@@ -47,14 +50,20 @@ export const acceptInvitationEndpoint = {
 
 				if (!invitation) {
 					console.log("[invitation/accept] ERROR - Invitation not found");
-					throw new Error("Invitation not found");
+					return ctx.json(
+						{ error: "This invitation link is invalid or has expired." },
+						{ status: 404 },
+					);
 				}
 
 				if (invitation.email !== verification.identifier) {
 					console.log(
 						"[invitation/accept] ERROR - Token email does not match invitation email",
 					);
-					throw new Error("Token does not match invitation");
+					return ctx.json(
+						{ error: "This invitation link is invalid or has expired." },
+						{ status: 400 },
+					);
 				}
 
 				if (invitation.status !== "pending") {
@@ -62,7 +71,15 @@ export const acceptInvitationEndpoint = {
 						"[invitation/accept] ERROR - Invitation already processed:",
 						invitation.status,
 					);
-					throw new Error("Invitation already accepted or rejected");
+					return ctx.json(
+						{
+							error:
+								invitation.status === "accepted"
+									? "This invitation has already been accepted."
+									: "This invitation is no longer available.",
+						},
+						{ status: 409 },
+					);
 				}
 
 				// 3. Create or get user

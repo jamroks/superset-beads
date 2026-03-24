@@ -4,7 +4,6 @@ import type { TRPCError } from "@trpc/server";
 const addMemberMock = mock(async (input: unknown) => input);
 const findOrgMembershipMock = mock(async () => null);
 const invitationFindFirstMock = mock(async () => null);
-const verificationFindFirstMock = mock(async () => null);
 
 mock.module("@superset/auth/stripe", () => ({
 	stripeClient: {
@@ -19,9 +18,6 @@ mock.module("@superset/db/client", () => ({
 		query: {
 			invitations: {
 				findFirst: invitationFindFirstMock,
-			},
-			verifications: {
-				findFirst: verificationFindFirstMock,
 			},
 		},
 	},
@@ -43,9 +39,6 @@ mock.module("@superset/db/schema/auth", () => ({
 	sessions: {
 		userId: "sessions.userId",
 		activeOrganizationId: "sessions.activeOrganizationId",
-	},
-	verifications: {
-		value: "verifications.value",
 	},
 }));
 
@@ -89,7 +82,6 @@ const TARGET_USER_ID = "22222222-2222-4222-8222-222222222222";
 const ACTOR_USER_ID = "33333333-3333-4333-8333-333333333333";
 const INVITATION_ID = "44444444-4444-4444-8444-444444444444";
 const INVITEE_EMAIL = "invitee@example.com";
-const TOKEN = "token-123";
 
 function createInvitation() {
 	return {
@@ -148,8 +140,6 @@ describe("organization router authorization", () => {
 		findOrgMembershipMock.mockImplementation(async () => null);
 		invitationFindFirstMock.mockReset();
 		invitationFindFirstMock.mockImplementation(async () => null);
-		verificationFindFirstMock.mockReset();
-		verificationFindFirstMock.mockImplementation(async () => null);
 	});
 
 	it("rejects cross-tenant addMember attempts before calling auth.api.addMember", async () => {
@@ -250,44 +240,6 @@ describe("organization router authorization", () => {
 		).rejects.toMatchObject({
 			code: "FORBIDDEN",
 			message: "Admin access required",
-		} satisfies Partial<TRPCError>);
-	});
-
-	it("returns a limited invitation preview when a valid token is provided", async () => {
-		invitationFindFirstMock.mockImplementation(async () => createInvitation());
-		verificationFindFirstMock.mockImplementation(async () => ({
-			identifier: INVITEE_EMAIL,
-			expiresAt: new Date("2099-01-02T00:00:00.000Z"),
-		}));
-		const caller = createCaller(createContext());
-
-		const result = await caller.organization.getInvitationPreview({
-			invitationId: INVITATION_ID,
-			token: TOKEN,
-		});
-
-		expect(result.organization.name).toBe("Superset");
-		expect(result.inviter.name).toBe("Inviter");
-		expect("email" in result.inviter).toBe(false);
-		expect("id" in result.organization).toBe(false);
-	});
-
-	it("rejects invitation preview requests with invalid tokens", async () => {
-		invitationFindFirstMock.mockImplementation(async () => createInvitation());
-		verificationFindFirstMock.mockImplementation(async () => ({
-			identifier: "someone-else@example.com",
-			expiresAt: new Date("2099-01-02T00:00:00.000Z"),
-		}));
-		const caller = createCaller(createContext());
-
-		await expect(
-			caller.organization.getInvitationPreview({
-				invitationId: INVITATION_ID,
-				token: TOKEN,
-			}),
-		).rejects.toMatchObject({
-			code: "NOT_FOUND",
-			message: "Invitation not found",
 		} satisfies Partial<TRPCError>);
 	});
 });
