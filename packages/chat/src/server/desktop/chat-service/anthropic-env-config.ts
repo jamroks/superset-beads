@@ -96,7 +96,25 @@ export function parseAnthropicEnvText(envText: string): AnthropicEnvVariables {
 
 	const variables: AnthropicEnvVariables = {};
 	const lines = envText.split("\n");
+
+	let multilineKey: string | null = null;
+	let multilineParts: string[] = [];
+	let multilineStartLine = 0;
+
 	for (const [index, rawLine] of lines.entries()) {
+		if (multilineKey !== null) {
+			const trimmed = rawLine.trimEnd();
+			if (trimmed.endsWith('"')) {
+				multilineParts.push(trimmed.slice(0, -1));
+				variables[multilineKey] = multilineParts.join("\n");
+				multilineKey = null;
+				multilineParts = [];
+			} else {
+				multilineParts.push(rawLine);
+			}
+			continue;
+		}
+
 		const line = rawLine.trim();
 		if (!line || line.startsWith("#")) continue;
 		if (!ENV_LINE.test(line)) {
@@ -116,8 +134,22 @@ export function parseAnthropicEnvText(envText: string): AnthropicEnvVariables {
 			throw new Error(`${INVALID_ENV_MESSAGE} Invalid line ${index + 1}.`);
 		}
 
+		const rawValue = line.slice(eqIndex + 1).trim();
+		if (rawValue.startsWith('"') && !rawValue.endsWith('"')) {
+			multilineKey = key;
+			multilineParts = [rawValue.slice(1)];
+			multilineStartLine = index;
+			continue;
+		}
+
 		const parsedValue = parseLineValue(line.slice(eqIndex + 1));
 		variables[key] = parsedValue;
+	}
+
+	if (multilineKey !== null) {
+		throw new Error(
+			`${INVALID_ENV_MESSAGE} Invalid line ${multilineStartLine + 1}.`,
+		);
 	}
 
 	return variables;
