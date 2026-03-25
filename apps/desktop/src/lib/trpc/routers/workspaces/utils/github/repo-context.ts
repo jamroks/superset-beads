@@ -95,7 +95,18 @@ export function shouldRefreshCachedRepoContext({
 		return false;
 	}
 
-	return normalizeGitHubUrl(cachedRepoContext.repoUrl) !== originUrl;
+	const normalizedOriginUrl = normalizeGitHubUrl(
+		originUrl ?? "",
+	)?.toLowerCase();
+	const normalizedCachedRepoUrl = normalizeGitHubUrl(
+		cachedRepoContext.repoUrl,
+	)?.toLowerCase();
+
+	if (!normalizedOriginUrl || !normalizedCachedRepoUrl) {
+		return false;
+	}
+
+	return normalizedCachedRepoUrl !== normalizedOriginUrl;
 }
 
 async function getOriginUrl(worktreePath: string): Promise<string | null> {

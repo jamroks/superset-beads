@@ -96,6 +96,32 @@ describe("shouldRefreshCachedRepoContext", () => {
 		).toBe(false);
 	});
 
+	test("returns false when origin is missing", () => {
+		expect(
+			shouldRefreshCachedRepoContext({
+				originUrl: null,
+				cachedRepoContext: {
+					repoUrl: "https://github.com/superset-sh/superset",
+					upstreamUrl: "https://github.com/superset-sh/superset",
+					isFork: false,
+				},
+			}),
+		).toBe(false);
+	});
+
+	test("treats SSH and HTTPS forms of the same repo as equal", () => {
+		expect(
+			shouldRefreshCachedRepoContext({
+				originUrl: "git@github.com:Superset-Sh/superset.git",
+				cachedRepoContext: {
+					repoUrl: "https://github.com/superset-sh/superset",
+					upstreamUrl: "https://github.com/superset-sh/superset",
+					isFork: false,
+				},
+			}),
+		).toBe(false);
+	});
+
 	test("returns true when origin no longer matches the cached repo", () => {
 		expect(
 			shouldRefreshCachedRepoContext({
