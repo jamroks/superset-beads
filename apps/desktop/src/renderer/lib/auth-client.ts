@@ -10,13 +10,46 @@ import { createAuthClient } from "better-auth/react";
 import { env } from "renderer/env.renderer";
 
 let authToken: string | null = null;
+let authTokenExpiresAtMs: number | null = null;
 
-export function setAuthToken(token: string | null) {
+function isAuthTokenExpired(): boolean {
+	return authTokenExpiresAtMs !== null && authTokenExpiresAtMs <= Date.now();
+}
+
+export function clearAuthState() {
+	authToken = null;
+	authTokenExpiresAtMs = null;
+	jwt = null;
+}
+
+export function setAuthToken(
+	token: string | null,
+	expiresAt: string | null = null,
+) {
 	authToken = token;
+	authTokenExpiresAtMs = expiresAt ? new Date(expiresAt).getTime() : null;
+	if (isAuthTokenExpired()) {
+		clearAuthState();
+	}
 }
 
 export function getAuthToken(): string | null {
+	if (isAuthTokenExpired()) {
+		clearAuthState();
+		return null;
+	}
 	return authToken;
+}
+
+export function hasAuthToken(): boolean {
+	return getAuthToken() !== null;
+}
+
+export function getAuthTokenExpiresAtMs(): number | null {
+	if (!getAuthToken()) {
+		return null;
+	}
+	return authTokenExpiresAtMs;
 }
 
 let jwt: string | null = null;
