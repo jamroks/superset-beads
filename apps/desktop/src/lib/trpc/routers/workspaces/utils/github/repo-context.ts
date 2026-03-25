@@ -1,6 +1,6 @@
 import { execGitWithShellPath } from "../git-client";
 import { execWithShellEnv } from "../shell-env";
-import { readCachedRepoContext } from "./cache";
+import { getCachedRepoContextState, readCachedRepoContext } from "./cache";
 import { GHRepoResponseSchema, type RepoContext } from "./types";
 
 async function refreshRepoContext(
@@ -65,13 +65,37 @@ export async function getRepoContext(
 		forceFresh?: boolean;
 	},
 ): Promise<RepoContext | null> {
+	const originUrl = await getOriginUrl(worktreePath);
+	const cachedRepoContext =
+		getCachedRepoContextState(worktreePath)?.value ?? null;
+	const forceFresh =
+		Boolean(options?.forceFresh) ||
+		shouldRefreshCachedRepoContext({
+			originUrl,
+			cachedRepoContext,
+		});
+
 	return readCachedRepoContext(
 		worktreePath,
 		() => refreshRepoContext(worktreePath),
 		{
-			forceFresh: options?.forceFresh,
+			forceFresh,
 		},
 	);
+}
+
+export function shouldRefreshCachedRepoContext({
+	originUrl,
+	cachedRepoContext,
+}: {
+	originUrl: string | null;
+	cachedRepoContext: RepoContext | null;
+}): boolean {
+	if (!cachedRepoContext) {
+		return false;
+	}
+
+	return normalizeGitHubUrl(cachedRepoContext.repoUrl) !== originUrl;
 }
 
 async function getOriginUrl(worktreePath: string): Promise<string | null> {

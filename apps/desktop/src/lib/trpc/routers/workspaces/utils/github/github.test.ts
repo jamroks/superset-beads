@@ -11,7 +11,10 @@ import {
 	getPRHeadBranchCandidates,
 	prMatchesLocalBranch,
 } from "./pr-resolution";
-import { getPullRequestRepoArgs } from "./repo-context";
+import {
+	getPullRequestRepoArgs,
+	shouldRefreshCachedRepoContext,
+} from "./repo-context";
 
 describe("branchMatchesPR", () => {
 	test("matches same-repo branch exactly", () => {
@@ -67,6 +70,43 @@ describe("getPullRequestRepoArgs", () => {
 				upstreamUrl: "not-a-github-url",
 			}),
 		).toEqual([]);
+	});
+});
+
+describe("shouldRefreshCachedRepoContext", () => {
+	test("returns false when no cached repo context exists", () => {
+		expect(
+			shouldRefreshCachedRepoContext({
+				originUrl: "https://github.com/superset-sh/superset",
+				cachedRepoContext: null,
+			}),
+		).toBe(false);
+	});
+
+	test("returns false when the cached repo still matches origin", () => {
+		expect(
+			shouldRefreshCachedRepoContext({
+				originUrl: "https://github.com/superset-sh/superset",
+				cachedRepoContext: {
+					repoUrl: "https://github.com/superset-sh/superset",
+					upstreamUrl: "https://github.com/superset-sh/superset",
+					isFork: false,
+				},
+			}),
+		).toBe(false);
+	});
+
+	test("returns true when origin no longer matches the cached repo", () => {
+		expect(
+			shouldRefreshCachedRepoContext({
+				originUrl: "https://github.com/Kitenite/superset",
+				cachedRepoContext: {
+					repoUrl: "https://github.com/superset-sh/superset",
+					upstreamUrl: "https://github.com/superset-sh/superset",
+					isFork: false,
+				},
+			}),
+		).toBe(true);
 	});
 });
 

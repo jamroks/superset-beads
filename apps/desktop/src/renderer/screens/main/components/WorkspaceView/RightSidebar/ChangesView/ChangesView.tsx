@@ -48,7 +48,6 @@ interface ChangesViewProps {
 
 const INACTIVE_BRANCH_REFETCH_INTERVAL_MS = 10_000;
 const GITHUB_STATUS_STALE_TIME_MS = 10_000;
-const GITHUB_STATUS_IDLE_STALE_TIME_MS = 60_000;
 const GITHUB_STATUS_REFETCH_INTERVAL_MS = 10_000;
 const GITHUB_PR_COMMENTS_STALE_TIME_MS = 30_000;
 const GITHUB_PR_COMMENTS_REFETCH_INTERVAL_MS = 30_000;
@@ -124,10 +123,8 @@ export function ChangesView({
 			refetchInterval: isReviewTabActive
 				? GITHUB_STATUS_REFETCH_INTERVAL_MS
 				: false,
-			refetchOnWindowFocus: isReviewTabActive,
-			staleTime: isReviewTabActive
-				? GITHUB_STATUS_STALE_TIME_MS
-				: GITHUB_STATUS_IDLE_STALE_TIME_MS,
+			refetchOnWindowFocus: isActive,
+			staleTime: isReviewTabActive ? GITHUB_STATUS_STALE_TIME_MS : 0,
 		},
 	);
 
