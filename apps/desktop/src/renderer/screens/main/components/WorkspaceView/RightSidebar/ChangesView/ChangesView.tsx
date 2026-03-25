@@ -290,7 +290,7 @@ export function ChangesView({
 				: {}),
 		},
 		{
-			enabled: !!workspaceId && isReviewTabActive && !!activePullRequest,
+			enabled: !!workspaceId && isActive && !!activePullRequest,
 			refetchInterval:
 				isReviewTabActive && activePullRequest
 					? GITHUB_PR_COMMENTS_REFETCH_INTERVAL_MS
