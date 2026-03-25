@@ -61,17 +61,24 @@ export interface ChatRuntimeServiceOptions {
 	headers: () => Record<string, string> | Promise<Record<string, string>>;
 	apiUrl: string;
 	onLifecycleEvent?: (event: LifecycleEvent) => void;
+	/** Maximum number of idle sessions to keep in memory. Oldest sessions are evicted when exceeded. */
+	maxIdleSessions?: number;
 }
 
 export class ChatRuntimeService {
+	private static readonly DEFAULT_MAX_IDLE_SESSIONS = 50;
+
 	private readonly runtimes = new Map<string, RuntimeSession>();
 	private readonly runtimeCreations = new Map<
 		string,
 		Promise<RuntimeSession>
 	>();
 	private readonly apiClient: ReturnType<typeof createTRPCClient<AppRouter>>;
+	private readonly maxIdleSessions: number;
 
 	constructor(readonly opts: ChatRuntimeServiceOptions) {
+		this.maxIdleSessions =
+			opts.maxIdleSessions ?? ChatRuntimeService.DEFAULT_MAX_IDLE_SESSIONS;
 		this.apiClient = createTRPCClient<AppRouter>({
 			links: [
 				httpBatchLink({
@@ -147,6 +154,7 @@ export class ChatRuntimeService {
 				await runSessionStartHook(sessionRuntime).catch(() => {});
 				subscribeToSessionEvents(sessionRuntime, this.opts.onLifecycleEvent);
 				this.runtimes.set(sessionId, sessionRuntime);
+				this.evictOldestIfNeeded();
 				return sessionRuntime;
 			} finally {
 				this.runtimeCreations.delete(runtimeKey);
@@ -155,6 +163,33 @@ export class ChatRuntimeService {
 
 		this.runtimeCreations.set(runtimeKey, creationPromise);
 		return creationPromise;
+	}
+
+	private evictOldestIfNeeded(): void {
+		while (this.runtimes.size > this.maxIdleSessions) {
+			const oldestKey = this.runtimes.keys().next().value;
+			if (oldestKey === undefined) break;
+			const oldest = this.runtimes.get(oldestKey);
+			this.runtimes.delete(oldestKey);
+			if (oldest) {
+				void destroyRuntime(oldest).catch(() => {});
+			}
+		}
+	}
+
+	async destroySession(sessionId: string): Promise<void> {
+		const runtime = this.runtimes.get(sessionId);
+		if (!runtime) return;
+		this.runtimes.delete(sessionId);
+		await destroyRuntime(runtime);
+	}
+
+	async destroyAllSessions(): Promise<void> {
+		const sessions = [...this.runtimes.values()];
+		this.runtimes.clear();
+		await Promise.all(
+			sessions.map((runtime) => destroyRuntime(runtime).catch(() => {})),
+		);
 	}
 
 	createRouter() {

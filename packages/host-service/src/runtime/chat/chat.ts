@@ -144,6 +144,8 @@ interface HarnessWithConfig {
 export interface ChatRuntimeManagerOptions {
 	db: HostDb;
 	runtimeResolver: ModelProviderRuntimeResolver;
+	/** Maximum number of idle sessions to keep in memory. Oldest sessions are evicted when exceeded. */
+	maxIdleSessions?: number;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -307,6 +309,8 @@ async function restartRuntimeFromUserMessage(
 }
 
 export class ChatRuntimeManager {
+	private static readonly DEFAULT_MAX_IDLE_SESSIONS = 50;
+
 	private readonly db: HostDb;
 	private readonly runtimeResolver: ModelProviderRuntimeResolver;
 	private readonly runtimes = new Map<string, RuntimeSession>();
@@ -314,10 +318,13 @@ export class ChatRuntimeManager {
 		string,
 		Promise<RuntimeSession>
 	>();
+	private readonly maxIdleSessions: number;
 
 	constructor(options: ChatRuntimeManagerOptions) {
 		this.db = options.db;
 		this.runtimeResolver = options.runtimeResolver;
+		this.maxIdleSessions =
+			options.maxIdleSessions ?? ChatRuntimeManager.DEFAULT_MAX_IDLE_SESSIONS;
 	}
 
 	private subscribeToSessionEvents(runtime: RuntimeSession): void {
@@ -389,7 +396,47 @@ export class ChatRuntimeManager {
 		};
 		this.subscribeToSessionEvents(sessionRuntime);
 		this.runtimes.set(sessionId, sessionRuntime);
+		this.evictOldestIfNeeded();
 		return sessionRuntime;
+	}
+
+	private evictOldestIfNeeded(): void {
+		while (this.runtimes.size > this.maxIdleSessions) {
+			const oldestKey = this.runtimes.keys().next().value;
+			if (oldestKey === undefined) break;
+			const oldest = this.runtimes.get(oldestKey);
+			this.runtimes.delete(oldestKey);
+			if (oldest) {
+				void this.destroyRuntimeSession(oldest).catch(() => {});
+			}
+		}
+	}
+
+	private async destroyRuntimeSession(runtime: RuntimeSession): Promise<void> {
+		if (runtime.hookManager) {
+			await runtime.hookManager.runSessionEnd?.().catch(() => {});
+		}
+		const harnessWithDestroy = runtime.harness as RuntimeHarness & {
+			destroy?: () => Promise<void>;
+		};
+		await harnessWithDestroy.destroy?.().catch(() => {});
+	}
+
+	async destroySession(sessionId: string): Promise<void> {
+		const runtime = this.runtimes.get(sessionId);
+		if (!runtime) return;
+		this.runtimes.delete(sessionId);
+		await this.destroyRuntimeSession(runtime);
+	}
+
+	async destroyAllSessions(): Promise<void> {
+		const sessions = [...this.runtimes.values()];
+		this.runtimes.clear();
+		await Promise.all(
+			sessions.map((runtime) =>
+				this.destroyRuntimeSession(runtime).catch(() => {}),
+			),
+		);
 	}
 
 	private async getOrCreateRuntime(
