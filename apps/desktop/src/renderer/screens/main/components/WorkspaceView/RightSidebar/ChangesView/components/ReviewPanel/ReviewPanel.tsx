@@ -15,6 +15,7 @@ import { VscChevronRight } from "react-icons/vsc";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { PRIcon } from "renderer/screens/main/components/PRIcon";
 import { useTabsStore } from "renderer/stores/tabs/store";
+import type { Pane } from "shared/tabs-types";
 import {
 	ALL_COMMENTS_COPY_ACTION_KEY,
 	buildAllCommentsClipboardText,
@@ -122,16 +123,17 @@ export function ReviewPanel({
 
 		if (existingPane?.review) {
 			// Update highlight and focus existing pane
+			const updatedPane: Pane = {
+				...existingPane,
+				review: {
+					...existingPane.review,
+					highlightCommentId: commentId,
+				},
+			};
 			useTabsStore.setState((state) => ({
 				panes: {
 					...state.panes,
-					[existingPane.id]: {
-						...existingPane,
-						review: {
-							...existingPane.review,
-							highlightCommentId: commentId,
-						},
-					},
+					[existingPane.id]: updatedPane,
 				},
 			}));
 			// Focus the pane's tab
