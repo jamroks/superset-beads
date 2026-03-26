@@ -15,7 +15,6 @@ import type {
 	SelectTaskStatus,
 	SelectUser,
 	SelectV2Device,
-	SelectV2DevicePresence,
 	SelectV2Project,
 	SelectV2UsersDevices,
 	SelectV2Workspace,
@@ -69,7 +68,6 @@ export interface OrgCollections {
 	taskStatuses: Collection<SelectTaskStatus>;
 	projects: Collection<SelectProject>;
 	v2Devices: Collection<SelectV2Device>;
-	v2DevicePresence: Collection<SelectV2DevicePresence>;
 	v2Projects: Collection<SelectV2Project>;
 	v2UsersDevices: Collection<SelectV2UsersDevices>;
 	v2Workspaces: Collection<SelectV2Workspace>;
@@ -245,22 +243,6 @@ function createOrgCollections(organizationId: string): OrgCollections {
 				columnMapper,
 			},
 			getKey: (item) => item.id,
-		}),
-	);
-
-	const v2DevicePresence = createCollection(
-		electricCollectionOptions<SelectV2DevicePresence>({
-			id: `v2_device_presence-${organizationId}`,
-			shapeOptions: {
-				url: electricUrl,
-				params: {
-					table: "v2_device_presence",
-					organizationId,
-				},
-				headers: electricHeaders,
-				columnMapper,
-			},
-			getKey: (item) => item.deviceId,
 		}),
 	);
 
@@ -528,7 +510,6 @@ function createOrgCollections(organizationId: string): OrgCollections {
 		taskStatuses,
 		projects,
 		v2Devices,
-		v2DevicePresence,
 		v2Projects,
 		v2UsersDevices,
 		v2Workspaces,
