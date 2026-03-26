@@ -567,6 +567,27 @@ describe("parsePorcelainStatusV2", () => {
 		expect(status.staged).toEqual(["new.txt"]);
 		expect(status.modified).toEqual(["edited.txt"]);
 	});
+
+	test("parses unmerged conflict entries from porcelain v2 output", () => {
+		const status = parsePorcelainStatusV2(
+			[
+				"# branch.oid abcdef1234567890",
+				"# branch.head main",
+				"u UU N... 100644 100644 100644 100644 43dd47ea691c90a5fa7827892c70241913351963 43dd47ea691c90a5fa7827892c70241913351963 43dd47ea691c90a5fa7827892c70241913351963 conflict.txt",
+			].join("\0"),
+		);
+
+		expect(status.current).toBe("main");
+		expect(status.conflicted).toEqual(["conflict.txt"]);
+		expect(status.files).toEqual([
+			{
+				path: "conflict.txt",
+				from: "conflict.txt",
+				index: "U",
+				working_dir: "U",
+			},
+		]);
+	});
 });
 
 describe("branchExistsOnRemote", () => {
