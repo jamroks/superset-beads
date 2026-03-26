@@ -87,6 +87,7 @@ export function FileTreeItem({
 
 	const handleDoubleClick = (e: React.MouseEvent) => {
 		e.stopPropagation();
+		onOpenInEditor(entry);
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {

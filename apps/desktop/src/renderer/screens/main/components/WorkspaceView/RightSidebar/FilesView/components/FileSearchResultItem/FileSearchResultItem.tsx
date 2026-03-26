@@ -94,7 +94,7 @@ export function FileSearchResultItem({
 	};
 
 	const handleDoubleClick = () => {
-		// Reserved for future pinning behavior
+		onOpenInEditor(entry);
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -131,15 +131,20 @@ export function FileItem({
 		[onClick, openInEditor],
 	);
 
-	const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-		e.preventDefault();
-		e.stopPropagation();
+	const handleDoubleClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
 
-		if (clickTimeoutRef.current) {
-			clearTimeout(clickTimeoutRef.current);
-			clickTimeoutRef.current = null;
-		}
-	}, []);
+			if (clickTimeoutRef.current) {
+				clearTimeout(clickTimeoutRef.current);
+				clickTimeoutRef.current = null;
+			}
+
+			openInEditor();
+		},
+		[openInEditor],
+	);
 
 	useEffect(() => {
 		return () => {
