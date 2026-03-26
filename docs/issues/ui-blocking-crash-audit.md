@@ -170,18 +170,33 @@ The renderer should fetch coarse-grained snapshots and subscribe to invalidation
 - Move project icon lookup, slash command discovery, and similar blocking lookups behind async runtime calls.
 - Defer non-essential startup work until after first paint.
 
-### Phase 3: Move local DB ownership to desktop runtime
+### Phase 3: Offload high-latency workspace mutations to runtime workers
+
+- Introduce a runtime job layer for the most blocking operations before the full platform migration is complete.
+- Start with git worktree create and delete flows, since they can block for a long time on git, filesystem teardown, and cleanup.
+- Route those operations through async runtime jobs with progress, cancellation, retries where safe, and terminal status events for the UI.
+- Keep Electron main as a broker that submits jobs and forwards updates, rather than executing the work directly.
+- Use this phase to prove the worker/runtime contract on the worst latency paths before moving the rest of local state management.
+
+Examples of good first candidates:
+
+- git worktree creation
+- git worktree deletion
+- branch sync or fetch paths tied to workspace lifecycle
+- large filesystem cleanup during workspace teardown
+
+### Phase 4: Move local DB ownership to desktop runtime
 
 - Move `better-sqlite3` usage out of Electron main.
 - Move settings, workspaces, projects, and sidebar query assembly into desktop runtime.
 - Keep main as a broker.
 
-### Phase 4: Publish read models instead of raw local joins
+### Phase 5: Publish read models instead of raw local joins
 
 - Replace repeated synchronous joins with runtime-owned snapshots.
 - Invalidate snapshots on mutations instead of rebuilding them ad hoc in the UI path.
 
-### Phase 5: Add enforcement
+### Phase 6: Add enforcement
 
 - Ban Node `*Sync` APIs in renderer and Electron main, except in tightly-reviewed boot shims if unavoidable.
 - Ban `better-sqlite3` imports outside desktop runtime.
