@@ -1,16 +1,24 @@
 import { WebClient } from "@slack/web-api";
-import { db } from "@superset/db/client";
+import { db, dbWs } from "@superset/db/client";
 import type { SlackConfig } from "@superset/db/schema";
 import {
 	integrationConnections,
 	members,
 	usersSlackUsers,
 } from "@superset/db/schema";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import { env } from "@/env";
 import { posthog } from "@/lib/analytics";
 import { verifySignedState } from "@/lib/oauth-state";
+
+type DbWsTransaction = Parameters<Parameters<typeof dbWs.transaction>[0]>[0];
+
+async function acquireSlackTeamLock(tx: DbWsTransaction, teamId: string) {
+	await tx.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended(${teamId}, 0))`,
+	);
+}
 
 export async function GET(request: Request) {
 	const url = new URL(request.url);
@@ -82,60 +90,66 @@ export async function GET(request: Request) {
 				`${env.NEXT_PUBLIC_WEB_URL}/integrations/slack?error=slack_api_error`,
 			);
 		}
+		const accessToken = tokenData.access_token;
+		const teamName = tokenData.team.name ?? null;
 
 		const config: SlackConfig = {
 			provider: "slack",
 		};
 
-		await db
-			.delete(integrationConnections)
-			.where(
-				and(
-					eq(integrationConnections.provider, "slack"),
-					eq(integrationConnections.externalOrgId, teamId),
-					ne(integrationConnections.organizationId, organizationId),
-				),
-			);
+		await dbWs.transaction(async (tx) => {
+			await acquireSlackTeamLock(tx, teamId);
 
-		await db
-			.insert(integrationConnections)
-			.values({
-				organizationId,
-				connectedByUserId: userId,
-				provider: "slack",
-				accessToken: tokenData.access_token,
-				externalOrgId: teamId,
-				externalOrgName: tokenData.team.name,
-				config,
-			})
-			.onConflictDoUpdate({
-				target: [
-					integrationConnections.organizationId,
-					integrationConnections.provider,
-				],
-				set: {
-					accessToken: tokenData.access_token,
-					externalOrgId: teamId,
-					externalOrgName: tokenData.team.name,
+			await tx
+				.delete(integrationConnections)
+				.where(
+					and(
+						eq(integrationConnections.provider, "slack"),
+						eq(integrationConnections.externalOrgId, teamId),
+						ne(integrationConnections.organizationId, organizationId),
+					),
+				);
+
+			await tx
+				.insert(integrationConnections)
+				.values({
+					organizationId,
 					connectedByUserId: userId,
+					provider: "slack",
+					accessToken,
+					externalOrgId: teamId,
+					externalOrgName: teamName,
 					config,
-					updatedAt: new Date(),
-				},
-			});
+				})
+				.onConflictDoUpdate({
+					target: [
+						integrationConnections.organizationId,
+						integrationConnections.provider,
+					],
+					set: {
+						accessToken,
+						externalOrgId: teamId,
+						externalOrgName: teamName,
+						connectedByUserId: userId,
+						config,
+						updatedAt: new Date(),
+					},
+				});
 
-		await db
-			.delete(usersSlackUsers)
-			.where(
-				and(
-					eq(usersSlackUsers.teamId, teamId),
-					ne(usersSlackUsers.organizationId, organizationId),
-				),
-			);
+			await tx
+				.delete(usersSlackUsers)
+				.where(
+					and(
+						eq(usersSlackUsers.teamId, teamId),
+						ne(usersSlackUsers.organizationId, organizationId),
+					),
+				);
+		});
 
 		console.log("[slack/callback] Connected workspace:", {
 			organizationId,
 			teamId,
-			teamName: tokenData.team.name,
+			teamName,
 		});
 
 		posthog.capture({

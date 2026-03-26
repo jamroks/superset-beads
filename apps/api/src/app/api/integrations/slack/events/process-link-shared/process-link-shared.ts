@@ -26,7 +26,10 @@ export async function processLinkShared({
 		linkCount: event.links.length,
 	});
 
-	const connection = await getSlackConnectionForTeam({ teamId });
+	const connection = await getSlackConnectionForTeam({
+		teamId,
+		slackUserId: event.user,
+	});
 
 	if (!connection) {
 		console.error(
