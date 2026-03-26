@@ -53,6 +53,26 @@ export function isApiKeyBearerToken(token: string): boolean {
 	return token.startsWith("sk_live_");
 }
 
+function normalizeApiUrl(apiUrl: string): string {
+	return apiUrl.replace(/\/+$/, "");
+}
+
+function getSafeAuthErrorName(error: unknown): string {
+	if (error && typeof error === "object") {
+		const errorName = "name" in error ? error.name : undefined;
+		if (typeof errorName === "string" && errorName.length > 0) {
+			return errorName;
+		}
+
+		const errorCode = "code" in error ? error.code : undefined;
+		if (typeof errorCode === "string" && errorCode.length > 0) {
+			return errorCode;
+		}
+	}
+
+	return "AuthVerificationError";
+}
+
 function looksLikeJwt(token: string): boolean {
 	const parts = token.split(".");
 	return parts.length === 3 && parts.every(Boolean);
@@ -173,6 +193,7 @@ export async function verifyToken(
 	deps: McpRequestDeps,
 ): Promise<AuthInfo | undefined> {
 	const bearerToken = getBearerToken(req);
+	const apiUrl = normalizeApiUrl(deps.apiUrl);
 	let oauthVerificationError: unknown;
 
 	if (bearerToken) {
@@ -186,7 +207,9 @@ export async function verifyToken(
 					return buildApiKeyAuthInfo(result.key);
 				}
 			} catch (error) {
-				console.error("[mcp/auth] API key verification failed:", error);
+				console.error("[mcp/auth] API key verification failed", {
+					errorName: getSafeAuthErrorName(error),
+				});
 			}
 
 			return undefined;
@@ -195,10 +218,10 @@ export async function verifyToken(
 		if (looksLikeJwt(bearerToken)) {
 			try {
 				const payload = (await deps.verifyAccessToken(bearerToken, {
-					jwksUrl: `${deps.apiUrl}/api/auth/jwks`,
+					jwksUrl: `${apiUrl}/api/auth/jwks`,
 					verifyOptions: {
-						issuer: deps.apiUrl,
-						audience: [deps.apiUrl, `${deps.apiUrl}/`],
+						issuer: apiUrl,
+						audience: [apiUrl, `${apiUrl}/`],
 					},
 				})) as Record<string, unknown>;
 
@@ -218,10 +241,9 @@ export async function verifyToken(
 	}
 
 	if (oauthVerificationError) {
-		console.error(
-			"[mcp/auth] Access token verification failed:",
-			oauthVerificationError,
-		);
+		console.error("[mcp/auth] Access token verification failed", {
+			errorName: getSafeAuthErrorName(oauthVerificationError),
+		});
 	}
 
 	return undefined;

@@ -125,13 +125,15 @@ describe("MCP auth flow", () => {
 	});
 
 	it("accepts OAuth access tokens before session lookup", async () => {
+		const verifyAccessToken = mock(async () => ({
+			sub: "user-2",
+			organizationId: "org-2",
+			scope: "profile email",
+			azp: "client-1",
+		})) as McpRequestDeps["verifyAccessToken"];
 		const deps = createDeps({
-			verifyAccessToken: mock(async () => ({
-				sub: "user-2",
-				organizationId: "org-2",
-				scope: "profile email",
-				azp: "client-1",
-			})) as McpRequestDeps["verifyAccessToken"],
+			apiUrl: "https://api.superset.sh/",
+			verifyAccessToken,
 		});
 
 		const authInfo = await verifyToken(
@@ -151,6 +153,19 @@ describe("MCP auth flow", () => {
 			},
 		});
 		expect(deps.sessionSpy).toHaveBeenCalledTimes(0);
+		expect(
+			(
+				verifyAccessToken as typeof verifyAccessToken & {
+					mock: { calls: unknown[][] };
+				}
+			).mock.calls[0]?.[1],
+		).toEqual({
+			jwksUrl: "https://api.superset.sh/api/auth/jwks",
+			verifyOptions: {
+				issuer: "https://api.superset.sh",
+				audience: ["https://api.superset.sh", "https://api.superset.sh/"],
+			},
+		});
 	});
 
 	it("accepts opaque bearer session tokens without attempting OAuth verification", async () => {
