@@ -532,6 +532,11 @@ export function setupKeyboardHandler(
 	const isWindows = platform.includes("win");
 
 	const handler = (event: KeyboardEvent): boolean => {
+		// During IME composition (e.g. Chinese/Japanese/Korean input), let xterm
+		// handle the event natively so composed characters aren't replaced by their
+		// raw ASCII equivalents (e.g. ， → ,).
+		if (event.isComposing || event.keyCode === 229) return true;
+
 		const isShiftEnter =
 			event.key === "Enter" &&
 			event.shiftKey &&

@@ -177,6 +177,110 @@ describe("setupKeyboardHandler", () => {
 		expect(onWrite).toHaveBeenCalledWith("\x1bf");
 	});
 
+	it("passes through IME composition events without interference", () => {
+		// @ts-expect-error - mocking navigator for tests
+		globalThis.navigator = { platform: "MacIntel" };
+
+		const captured: { handler: ((event: KeyboardEvent) => boolean) | null } = {
+			handler: null,
+		};
+		const xterm = {
+			attachCustomKeyEventHandler: (
+				next: (event: KeyboardEvent) => boolean,
+			) => {
+				captured.handler = next;
+			},
+		};
+
+		const onWrite = mock(() => {});
+		setupKeyboardHandler(xterm as unknown as XTerm, { onWrite });
+
+		// During IME composition, isComposing is true - handler should return true
+		// to let xterm handle the event natively (preserving composed characters
+		// like Chinese punctuation ，。、 instead of converting to , . etc.)
+		const result = captured.handler?.({
+			type: "keydown",
+			key: "Process",
+			keyCode: 229,
+			isComposing: true,
+			metaKey: false,
+			ctrlKey: false,
+			altKey: false,
+			shiftKey: false,
+		} as unknown as KeyboardEvent);
+
+		expect(result).toBe(true);
+		expect(onWrite).not.toHaveBeenCalled();
+	});
+
+	it("passes through events with keyCode 229 even when isComposing is false", () => {
+		// @ts-expect-error - mocking navigator for tests
+		globalThis.navigator = { platform: "MacIntel" };
+
+		const captured: { handler: ((event: KeyboardEvent) => boolean) | null } = {
+			handler: null,
+		};
+		const xterm = {
+			attachCustomKeyEventHandler: (
+				next: (event: KeyboardEvent) => boolean,
+			) => {
+				captured.handler = next;
+			},
+		};
+
+		const onWrite = mock(() => {});
+		setupKeyboardHandler(xterm as unknown as XTerm, { onWrite });
+
+		// Some browsers set keyCode to 229 for IME events even before isComposing is set
+		const result = captured.handler?.({
+			type: "keydown",
+			key: ",",
+			keyCode: 229,
+			isComposing: false,
+			metaKey: false,
+			ctrlKey: false,
+			altKey: false,
+			shiftKey: false,
+		} as unknown as KeyboardEvent);
+
+		expect(result).toBe(true);
+		expect(onWrite).not.toHaveBeenCalled();
+	});
+
+	it("does not intercept Enter key during IME composition", () => {
+		// @ts-expect-error - mocking navigator for tests
+		globalThis.navigator = { platform: "MacIntel" };
+
+		const captured: { handler: ((event: KeyboardEvent) => boolean) | null } = {
+			handler: null,
+		};
+		const xterm = {
+			attachCustomKeyEventHandler: (
+				next: (event: KeyboardEvent) => boolean,
+			) => {
+				captured.handler = next;
+			},
+		};
+
+		const onShiftEnter = mock(() => {});
+		setupKeyboardHandler(xterm as unknown as XTerm, { onShiftEnter });
+
+		// During CJK IME, pressing Enter to confirm a character fires with isComposing=true
+		const result = captured.handler?.({
+			type: "keydown",
+			key: "Enter",
+			keyCode: 229,
+			isComposing: true,
+			metaKey: false,
+			ctrlKey: false,
+			altKey: false,
+			shiftKey: true,
+		} as unknown as KeyboardEvent);
+
+		expect(result).toBe(true);
+		expect(onShiftEnter).not.toHaveBeenCalled();
+	});
+
 	it("maps Ctrl+Left/Right to Meta+B/F on Windows", () => {
 		// @ts-expect-error - mocking navigator for tests
 		globalThis.navigator = { platform: "Win32" };

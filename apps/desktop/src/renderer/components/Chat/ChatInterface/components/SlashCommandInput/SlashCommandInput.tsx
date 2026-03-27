@@ -40,6 +40,8 @@ export function SlashCommandInput({
 	const handleKeyDownCapture = useCallback(
 		(e: React.KeyboardEvent) => {
 			if (!slashCommands.isOpen) return;
+			// Don't intercept events during IME composition (e.g. Chinese input)
+			if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
 
 			switch (e.key) {
 				case "Escape":
