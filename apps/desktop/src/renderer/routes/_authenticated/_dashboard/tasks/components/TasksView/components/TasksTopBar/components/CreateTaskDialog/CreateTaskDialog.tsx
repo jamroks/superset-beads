@@ -196,7 +196,7 @@ export function CreateTaskDialog({
 					</DialogClose>
 				</div>
 
-				<div className="flex min-h-0 flex-1 flex-col px-4 py-4">
+				<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
 					<input
 						ref={titleInputRef}
 						type="text"
