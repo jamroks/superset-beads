@@ -8,9 +8,7 @@ export function removeHostServiceSecret(hostUrl: string): void {
 	secrets.delete(hostUrl);
 }
 
-export function getHostServiceHeaders(
-	hostUrl: string,
-): Record<string, string> {
+export function getHostServiceHeaders(hostUrl: string): Record<string, string> {
 	const secret = secrets.get(hostUrl);
 	return secret ? { Authorization: `Bearer ${secret}` } : {};
 }
