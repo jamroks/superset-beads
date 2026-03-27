@@ -5,6 +5,7 @@ import { useTabsStore } from "renderer/stores/tabs/store";
 import { setPaneWorkspaceRunState } from "renderer/stores/tabs/workspace-run";
 import { DEBUG_TERMINAL } from "../config";
 import type { TerminalExitReason, TerminalStreamEvent } from "../types";
+import { writePreservingScroll } from "../utils";
 
 export interface UseTerminalStreamOptions {
 	paneId: string;
@@ -172,7 +173,7 @@ export function useTerminalStream({
 				}
 
 				updateModesRef.current(event.data);
-				xterm.write(event.data);
+				writePreservingScroll(xterm, event.data);
 				updateCwdRef.current(event.data);
 			} else if (event.type === "exit") {
 				handleTerminalExit(event.exitCode, xterm, event.reason);

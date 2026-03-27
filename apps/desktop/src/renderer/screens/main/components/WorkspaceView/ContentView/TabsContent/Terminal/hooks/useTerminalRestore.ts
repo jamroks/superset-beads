@@ -7,7 +7,7 @@ import type {
 	TerminalExitReason,
 	TerminalStreamEvent,
 } from "../types";
-import { scrollToBottom } from "../utils";
+import { scrollToBottom, writePreservingScroll } from "../utils";
 
 export interface UseTerminalRestoreOptions {
 	paneId: string;
@@ -94,7 +94,7 @@ export function useTerminalRestore({
 		for (const event of events) {
 			if (event.type === "data") {
 				updateModesRef.current(event.data);
-				xterm.write(event.data);
+				writePreservingScroll(xterm, event.data);
 				updateCwdRef.current(event.data);
 			} else if (event.type === "exit") {
 				onExitEventRef.current(event.exitCode, xterm, event.reason);
