@@ -212,7 +212,7 @@ export function CreateTaskDialog({
 						className="w-full bg-transparent text-3xl font-semibold tracking-tight outline-none placeholder:text-muted-foreground/60"
 					/>
 
-					<div className="mt-5 flex-1">
+					<div className="mt-5 min-h-0 flex-1 overflow-y-auto">
 						<TaskMarkdownRenderer
 							content={description}
 							onChange={setDescription}
