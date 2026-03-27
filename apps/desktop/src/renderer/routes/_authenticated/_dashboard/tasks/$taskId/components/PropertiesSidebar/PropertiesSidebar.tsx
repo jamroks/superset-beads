@@ -1,7 +1,7 @@
-import { Badge } from "@superset/ui/badge";
 import { ScrollArea } from "@superset/ui/scroll-area";
 import type { TaskWithStatus } from "../../../components/TasksView/hooks/useTasksTable";
 import { AssigneeProperty } from "./components/AssigneeProperty";
+import { LabelsProperty } from "./components/LabelsProperty";
 import { OpenInWorkspace } from "./components/OpenInWorkspace";
 import { PriorityProperty } from "./components/PriorityProperty";
 import { StatusProperty } from "./components/StatusProperty";
@@ -11,8 +11,6 @@ interface PropertiesSidebarProps {
 }
 
 export function PropertiesSidebar({ task }: PropertiesSidebarProps) {
-	const labels = task.labels ?? [];
-
 	return (
 		<div className="w-64 border-l border-border shrink-0">
 			<ScrollArea className="h-full">
@@ -27,21 +25,7 @@ export function PropertiesSidebar({ task }: PropertiesSidebarProps) {
 						<AssigneeProperty task={task} />
 					</div>
 
-					{/* Labels */}
-					<div className="flex flex-col gap-2">
-						<span className="text-xs text-muted-foreground">Labels</span>
-						{labels.length > 0 ? (
-							<div className="flex flex-wrap gap-1">
-								{labels.map((label) => (
-									<Badge key={label} variant="outline" className="text-xs">
-										{label}
-									</Badge>
-								))}
-							</div>
-						) : (
-							<span className="text-sm text-muted-foreground">No labels</span>
-						)}
-					</div>
+					<LabelsProperty task={task} />
 
 					<OpenInWorkspace task={task} />
 				</div>

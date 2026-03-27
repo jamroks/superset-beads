@@ -1,0 +1,1 @@
+export { LabelsProperty } from "./LabelsProperty";
