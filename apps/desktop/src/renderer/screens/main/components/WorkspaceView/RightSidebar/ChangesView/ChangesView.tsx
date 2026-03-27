@@ -109,16 +109,22 @@ export function ChangesView({
 		},
 	);
 
-	const { status, isLoading, effectiveBaseBranch, branchData, refetch } =
-		useGitChangesStatus({
-			worktreePath,
-			refetchInterval: isActive ? 2500 : undefined,
-			refetchOnWindowFocus: isActive,
-			branchRefetchInterval: isActive
-				? undefined
-				: INACTIVE_BRANCH_REFETCH_INTERVAL_MS,
-			branchRefetchOnWindowFocus: true,
-		});
+	const {
+		status,
+		isLoading,
+		isError,
+		effectiveBaseBranch,
+		branchData,
+		refetch,
+	} = useGitChangesStatus({
+		worktreePath,
+		refetchInterval: isActive ? 2500 : undefined,
+		refetchOnWindowFocus: isActive,
+		branchRefetchInterval: isActive
+			? undefined
+			: INACTIVE_BRANCH_REFETCH_INTERVAL_MS,
+		branchRefetchOnWindowFocus: true,
+	});
 
 	const {
 		data: githubStatus,
@@ -685,8 +691,13 @@ export function ChangesView({
 		!status.untracked
 	) {
 		return (
-			<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4">
-				Unable to load changes
+			<div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm p-4 gap-2">
+				<span>Unable to load changes</span>
+				{isError && (
+					<Button variant="ghost" size="sm" onClick={() => refetch()}>
+						Retry
+					</Button>
+				)}
 			</div>
 		);
 	}
