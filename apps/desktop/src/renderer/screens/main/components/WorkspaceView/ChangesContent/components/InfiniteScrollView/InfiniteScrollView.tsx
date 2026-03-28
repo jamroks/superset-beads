@@ -1,5 +1,6 @@
 import { Button } from "@superset/ui/button";
 import { useCallback, useMemo, useState } from "react";
+import { useScrollPreservation } from "renderer/screens/main/components/WorkspaceView/hooks/useScrollPreservation";
 import { useChangesStore } from "renderer/stores/changes";
 import { SidebarMode, useSidebarStore } from "renderer/stores/sidebar-state";
 import type { GitChangesStatus } from "shared/changes-types";
@@ -24,6 +25,9 @@ export function InfiniteScrollView({
 	baseBranch,
 }: InfiniteScrollViewProps) {
 	const { containerRef, viewedCount } = useScrollContext();
+
+	useScrollPreservation(containerRef, `changes:${worktreePath}`);
+
 	const {
 		viewMode: diffViewMode,
 		setViewMode: setDiffViewMode,

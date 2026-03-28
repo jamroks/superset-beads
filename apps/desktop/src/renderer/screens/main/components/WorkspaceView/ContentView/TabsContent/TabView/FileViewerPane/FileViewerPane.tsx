@@ -6,6 +6,7 @@ import type { MosaicBranch } from "react-mosaic-component";
 import type { MarkdownEditorAdapter } from "renderer/components/MarkdownRenderer";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { FileSaveConflictDialog } from "renderer/screens/main/components/WorkspaceView/components/FileSaveConflictDialog";
+import { useScrollPreservation } from "renderer/screens/main/components/WorkspaceView/hooks/useScrollPreservation";
 import { useWorkspaceFileEvents } from "renderer/screens/main/components/WorkspaceView/hooks/useWorkspaceFileEvents";
 import { useChangesStore } from "renderer/stores/changes";
 import {
@@ -404,7 +405,7 @@ export function FileViewerPane({
 		lastTopLineRef.current = line;
 	}, []);
 
-	// Persist scroll position on unmount so it can be restored when returning to this workspace
+	// Persist raw mode scroll position on unmount so it can be restored when returning to this workspace
 	useEffect(() => {
 		return () => {
 			const topLine = lastTopLineRef.current;
@@ -413,7 +414,6 @@ export function FileViewerPane({
 			const panes = useTabsStore.getState().panes;
 			const currentPane = panes[paneId];
 			if (!currentPane?.fileViewer) return;
-
 			useTabsStore.setState({
 				panes: {
 					...panes,
@@ -428,6 +428,13 @@ export function FileViewerPane({
 			});
 		};
 	}, [paneId]);
+
+	// Preserve scroll position for diff and rendered mode containers across workspace switches
+	useScrollPreservation(
+		viewMode === "diff" ? diffContainerRef : markdownContainerRef,
+		`pane:${paneId}`,
+		[viewMode, isLoadingDiff, diffData, isLoadingRaw, rawFileData],
+	);
 
 	useEffect(() => {
 		if (!isDirty) {

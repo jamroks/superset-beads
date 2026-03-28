@@ -204,16 +204,6 @@ export function CodeEditor({
 			if (update.docChanged && !isExternalUpdateRef.current) {
 				onChangeRef.current?.(update.state.doc.toString());
 			}
-			if (update.viewportChanged) {
-				try {
-					const topLine = update.view.state.doc.lineAt(
-						update.view.viewport.from,
-					).number;
-					onTopLineChangeRef.current?.(topLine);
-				} catch {
-					// View may be in an intermediate state during teardown
-				}
-			}
 		});
 
 		const saveKeymap = keymap.of([
@@ -278,12 +268,24 @@ export function CodeEditor({
 		});
 		const adapter = createCodeMirrorAdapter(view);
 
+		const onScroll = () => {
+			try {
+				const topPos = view.lineBlockAtHeight(view.scrollDOM.scrollTop).from;
+				const topLine = view.state.doc.lineAt(topPos).number;
+				onTopLineChangeRef.current?.(topLine);
+			} catch {
+				// View may be in an intermediate state during teardown
+			}
+		};
+		view.scrollDOM.addEventListener("scroll", onScroll);
+
 		viewRef.current = view;
 		if (editorRef) {
 			editorRef.current = adapter;
 		}
 
 		return () => {
+			view.scrollDOM.removeEventListener("scroll", onScroll);
 			if (editorRef?.current === adapter) {
 				editorRef.current = null;
 			}
