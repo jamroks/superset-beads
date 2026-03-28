@@ -219,3 +219,127 @@ describe("Terminal Host Session shell args", () => {
 		expect(writes.some((message) => message.includes('"hello"'))).toBe(true);
 	});
 });
+
+describe("Terminal Host Session backpressure (#2968)", () => {
+	/**
+	 * Helper: create a session with a fake socket attached, bypassing the
+	 * spawn/attach lifecycle so we can test broadcastEvent in isolation.
+	 */
+	function createSessionWithSocket(socketOverrides: {
+		write: (message: string) => boolean;
+		once?: (event: string, listener: () => void) => void;
+	}) {
+		const session = new Session({
+			sessionId: "session-backpressure",
+			workspaceId: "workspace-1",
+			paneId: "pane-1",
+			tabId: "tab-1",
+			cols: 80,
+			rows: 24,
+			cwd: "/tmp",
+			shell: "/bin/bash",
+		});
+
+		// Directly register the fake socket as an attached client
+		const socket = socketOverrides as unknown as import("node:net").Socket;
+		const attachedClients = (
+			session as unknown as {
+				attachedClients: Map<
+					import("node:net").Socket,
+					{
+						socket: import("node:net").Socket;
+						attachedAt: number;
+						attachToken: symbol;
+					}
+				>;
+			}
+		).attachedClients;
+		attachedClients.set(socket, {
+			socket,
+			attachedAt: Date.now(),
+			attachToken: Symbol("test"),
+		});
+
+		const broadcast = (data: string) => {
+			(
+				session as unknown as {
+					broadcastEvent: (
+						eventType: string,
+						payload: { type: "data"; data: string },
+					) => void;
+				}
+			).broadcastEvent("data", { type: "data", data });
+		};
+
+		return { session, socket, broadcast };
+	}
+
+	it("stops writing to a backpressured socket instead of growing the buffer", () => {
+		const writes: string[] = [];
+		let drainCallback: (() => void) | null = null;
+
+		const { broadcast } = createSessionWithSocket({
+			write(message: string) {
+				writes.push(message);
+				// First write succeeds, subsequent ones signal backpressure
+				return writes.length <= 1;
+			},
+			once(event: string, listener: () => void) {
+				if (event === "drain") drainCallback = listener;
+			},
+		});
+
+		// First broadcast: write succeeds (returns true)
+		broadcast("frame-1");
+		expect(writes).toHaveLength(1);
+		expect(writes[0]).toContain("frame-1");
+
+		// Second broadcast: write returns false → socket becomes backpressured
+		broadcast("frame-2");
+		expect(writes).toHaveLength(2);
+		expect(writes[1]).toContain("frame-2");
+		expect(drainCallback).not.toBeNull();
+
+		// Subsequent broadcasts should be SKIPPED (not written to the socket)
+		// This is the fix for #2968: previously these would keep writing,
+		// growing Node's internal buffer without bound.
+		broadcast("frame-3");
+		broadcast("frame-4");
+		broadcast("frame-5");
+		expect(writes).toHaveLength(2); // No new writes!
+	});
+
+	it("resumes writing after the socket drains", () => {
+		const writes: string[] = [];
+		let drainCallback: (() => void) | null = null;
+
+		const { broadcast } = createSessionWithSocket({
+			write(message: string) {
+				writes.push(message);
+				// After drain, writes succeed again
+				return writes.length <= 1 || writes.length > 5;
+			},
+			once(event: string, listener: () => void) {
+				if (event === "drain") drainCallback = listener;
+			},
+		});
+
+		// Fill up the socket
+		broadcast("frame-1"); // succeeds
+		broadcast("frame-2"); // backpressures
+
+		// Skipped during backpressure
+		broadcast("frame-3");
+		broadcast("frame-4");
+		expect(writes).toHaveLength(2);
+
+		// Simulate drain
+		expect(drainCallback).not.toBeNull();
+		drainCallback?.();
+
+		// After drain, new broadcasts should write again
+		broadcast("frame-5");
+		expect(writes).toHaveLength(3);
+		expect(writes[2]).toContain("frame-5");
+	});
+});

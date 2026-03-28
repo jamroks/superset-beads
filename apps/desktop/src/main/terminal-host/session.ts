@@ -1065,10 +1065,18 @@ export class Session {
 
 		for (const { socket } of this.attachedClients.values()) {
 			try {
+				// Skip writing to sockets that are already backpressured.
+				// Continuing to write would grow Node's internal write buffer
+				// without bound, and when the socket finally drains the massive
+				// buffer flush causes a visible freeze / catch-up stall (#2968).
+				// The data is still processed by the emulator, so snapshot state
+				// stays consistent and the next TUI repaint naturally resyncs.
+				if (this.clientSocketsWaitingForDrain.has(socket)) {
+					continue;
+				}
+
 				const canWrite = socket.write(message);
 				if (!canWrite) {
-					// Socket buffer full - data will be queued but may cause memory pressure
-					// In production, could track this and pause PTY output temporarily
 					console.warn(
 						`[Session ${this.sessionId}] Client socket buffer full, output may be delayed`,
 					);
