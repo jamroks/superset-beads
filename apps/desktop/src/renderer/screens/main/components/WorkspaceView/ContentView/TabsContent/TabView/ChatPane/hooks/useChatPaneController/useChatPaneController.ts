@@ -442,27 +442,24 @@ export function useChatPaneController({
 			});
 	}, [handleNewChat, needsLegacySessionBootstrap, organizationId]);
 
-	const sessionItems = useMemo(
-		() => {
-			const nextItems = sessions.map((item) => toSessionSelectorItem(item));
-			if (
-				!isDesktopChatDevMode() ||
-				!sessionId ||
-				nextItems.some((item) => item.sessionId === sessionId)
-			) {
-				return nextItems;
-			}
-			return [
-				{
-					sessionId,
-					title: "",
-					updatedAt: new Date(),
-				},
-				...nextItems,
-			];
-		},
-		[sessionId, sessions],
-	);
+	const sessionItems = useMemo(() => {
+		const nextItems = sessions.map((item) => toSessionSelectorItem(item));
+		if (
+			!isDesktopChatDevMode() ||
+			!sessionId ||
+			nextItems.some((item) => item.sessionId === sessionId)
+		) {
+			return nextItems;
+		}
+		return [
+			{
+				sessionId,
+				title: "",
+				updatedAt: new Date(),
+			},
+			...nextItems,
+		];
+	}, [sessionId, sessions]);
 
 	const consumeLaunchConfig = useCallback(() => {
 		setChatLaunchConfig(paneId, null);
