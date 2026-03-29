@@ -7,6 +7,25 @@ import { type RefObject, useEffect, useRef } from "react";
 const scrollCache = new Map<string, number>();
 
 /**
+ * Try to restore scrollTop on a container. If the container doesn't have
+ * enough content yet (e.g. TipTap with immediatelyRender: false), retry
+ * on subsequent animation frames up to a limit.
+ */
+function restoreScrollTop(
+	container: HTMLElement,
+	target: number,
+	retriesLeft = 10,
+) {
+	container.scrollTop = target;
+	if (container.scrollTop >= target || retriesLeft <= 0) return;
+
+	// Content not tall enough yet — retry next frame
+	requestAnimationFrame(() =>
+		restoreScrollTop(container, target, retriesLeft - 1),
+	);
+}
+
+/**
  * Preserves the scroll position of a DOM container across unmount/remount cycles.
  *
  * Attaches a scroll listener to track the current `scrollTop`, saves it to a
@@ -33,12 +52,10 @@ export function useScrollPreservation(
 		const container = containerRef.current;
 		if (!container) return;
 
-		// Restore saved scroll position after the browser paints
+		// Restore saved scroll position, retrying if content isn't ready yet
 		const saved = scrollCache.get(cacheKey);
 		if (saved != null) {
-			requestAnimationFrame(() => {
-				container.scrollTop = saved;
-			});
+			requestAnimationFrame(() => restoreScrollTop(container, saved));
 		}
 
 		const onScroll = () => {
