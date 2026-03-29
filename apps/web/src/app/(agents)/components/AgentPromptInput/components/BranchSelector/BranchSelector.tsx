@@ -7,11 +7,13 @@ import { ResponsiveDropdown } from "../../../ResponsiveDropdown";
 type BranchSelectorProps = {
 	selectedBranch: string;
 	onBranchChange: (branch: string) => void;
+	disabled?: boolean;
 };
 
 export function BranchSelector({
 	selectedBranch,
 	onBranchChange,
+	disabled = false,
 }: BranchSelectorProps) {
 	return (
 		<ResponsiveDropdown
@@ -24,7 +26,8 @@ export function BranchSelector({
 			trigger={
 				<button
 					type="button"
-					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					disabled={disabled}
+					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
 				>
 					<GitBranch className="size-3" />
 					<span>{selectedBranch}</span>

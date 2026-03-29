@@ -10,7 +10,11 @@ import {
 	PromptInputTools,
 } from "@superset/ui/ai-elements/prompt-input";
 import { ArrowUpIcon } from "lucide-react";
-import { MAX_FILE_SIZE, MAX_FILES } from "../../constants";
+import {
+	AGENTS_WEB_PREVIEW_MESSAGE,
+	MAX_FILE_SIZE,
+	MAX_FILES,
+} from "../../constants";
 import { PlusMenu } from "../PlusMenu";
 import { BranchSelector } from "./components/BranchSelector";
 import { ModelPicker } from "./components/ModelPicker";
@@ -18,6 +22,7 @@ import { RepoSelector } from "./components/RepoSelector";
 import { useAgentPrompt } from "./hooks/useAgentPrompt";
 
 export function AgentPromptInput() {
+	const isPreview = true;
 	const {
 		selectedModel,
 		setSelectedModel,
@@ -41,7 +46,8 @@ export function AgentPromptInput() {
 					{(file) => <PromptInputAttachment key={file.id} data={file} />}
 				</PromptInputAttachments>
 				<PromptInputTextarea
-					placeholder="What do you want to build?"
+					disabled={isPreview}
+					placeholder="Session creation on web is coming soon"
 					className="min-h-10"
 				/>
 				<PromptInputFooter>
@@ -49,11 +55,15 @@ export function AgentPromptInput() {
 						<ModelPicker
 							selectedModel={selectedModel}
 							onModelChange={setSelectedModel}
+							disabled={isPreview}
 						/>
 					</PromptInputTools>
 					<div className="flex items-center gap-2">
-						<PlusMenu />
-						<PromptInputSubmit className="size-[23px] rounded-full border border-transparent bg-foreground/10 p-[5px] shadow-none hover:bg-foreground/20">
+						<PlusMenu disabled={isPreview} />
+						<PromptInputSubmit
+							disabled={isPreview}
+							className="size-[23px] rounded-full border border-transparent bg-foreground/10 p-[5px] shadow-none hover:bg-foreground/20"
+						>
 							<ArrowUpIcon className="size-3.5 text-muted-foreground" />
 						</PromptInputSubmit>
 					</div>
@@ -63,12 +73,17 @@ export function AgentPromptInput() {
 				<RepoSelector
 					selectedRepo={selectedRepo}
 					onRepoChange={setSelectedRepo}
+					disabled={isPreview}
 				/>
 				<BranchSelector
 					selectedBranch={selectedBranch}
 					onBranchChange={setSelectedBranch}
+					disabled={isPreview}
 				/>
 			</div>
+			<p className="border-t border-border/50 px-3 py-2 text-xs text-muted-foreground">
+				{AGENTS_WEB_PREVIEW_MESSAGE}
+			</p>
 		</div>
 	);
 }

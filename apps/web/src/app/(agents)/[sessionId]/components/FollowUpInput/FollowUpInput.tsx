@@ -13,9 +13,14 @@ import {
 import { ArrowUpIcon } from "lucide-react";
 import { useCallback } from "react";
 import { PlusMenu } from "../../../components/PlusMenu";
-import { MAX_FILE_SIZE, MAX_FILES } from "../../../constants";
+import {
+	AGENTS_WEB_PREVIEW_MESSAGE,
+	MAX_FILE_SIZE,
+	MAX_FILES,
+} from "../../../constants";
 
 export function FollowUpInput() {
+	const isPreview = true;
 	const handleSubmit = useCallback((_message: PromptInputMessage) => {
 		// TODO: Wire to backend
 	}, []);
@@ -33,7 +38,8 @@ export function FollowUpInput() {
 					{(file) => <PromptInputAttachment key={file.id} data={file} />}
 				</PromptInputAttachments>
 				<PromptInputTextarea
-					placeholder="Add a follow up..."
+					disabled={isPreview}
+					placeholder="Follow-ups on web are coming soon"
 					className="min-h-10"
 				/>
 				<PromptInputFooter>
@@ -43,13 +49,19 @@ export function FollowUpInput() {
 						</span>
 					</PromptInputTools>
 					<div className="flex items-center gap-2">
-						<PlusMenu />
-						<PromptInputSubmit className="size-[23px] rounded-full border border-transparent bg-foreground/10 p-[5px] shadow-none hover:bg-foreground/20">
+						<PlusMenu disabled={isPreview} />
+						<PromptInputSubmit
+							disabled={isPreview}
+							className="size-[23px] rounded-full border border-transparent bg-foreground/10 p-[5px] shadow-none hover:bg-foreground/20"
+						>
 							<ArrowUpIcon className="size-3.5 text-muted-foreground" />
 						</PromptInputSubmit>
 					</div>
 				</PromptInputFooter>
 			</PromptInput>
+			<p className="pt-2 text-xs text-muted-foreground">
+				{AGENTS_WEB_PREVIEW_MESSAGE}
+			</p>
 		</div>
 	);
 }

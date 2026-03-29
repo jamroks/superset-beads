@@ -25,8 +25,7 @@ import { useTRPC } from "@/trpc/react";
 
 const navItems = [
 	{ label: "Agents", href: "/" },
-	{ label: "Automations", href: "/automations" },
-	{ label: "Dashboard", href: "/integrations" },
+	{ label: "Integrations", href: "/integrations" },
 ];
 
 export function AgentsHeader() {

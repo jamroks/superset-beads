@@ -8,11 +8,13 @@ import { ResponsiveDropdown } from "../../../ResponsiveDropdown";
 type ModelPickerProps = {
 	selectedModel: MockModel;
 	onModelChange: (model: MockModel) => void;
+	disabled?: boolean;
 };
 
 export function ModelPicker({
 	selectedModel,
 	onModelChange,
+	disabled = false,
 }: ModelPickerProps) {
 	return (
 		<ResponsiveDropdown
@@ -27,7 +29,8 @@ export function ModelPicker({
 			trigger={
 				<button
 					type="button"
-					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					disabled={disabled}
+					className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
 				>
 					<ModelSelectorLogo
 						provider={selectedModel.provider}

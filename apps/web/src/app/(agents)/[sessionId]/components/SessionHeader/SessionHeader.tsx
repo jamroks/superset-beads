@@ -1,10 +1,10 @@
 "use client";
 
+import { Badge } from "@superset/ui/badge";
 import { Button } from "@superset/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { MockSession } from "../../../mock-data";
-import { SessionMenu } from "../SessionMenu";
 
 type SessionHeaderProps = {
 	session: MockSession;
@@ -26,10 +26,7 @@ export function SessionHeader({ session }: SessionHeaderProps) {
 			<h1 className="min-w-0 flex-1 truncate text-sm font-medium">
 				{session.title}
 			</h1>
-			<SessionMenu />
-			<Button variant="default" size="sm" className="text-xs">
-				View PR
-			</Button>
+			<Badge variant="secondary">Preview</Badge>
 		</div>
 	);
 }

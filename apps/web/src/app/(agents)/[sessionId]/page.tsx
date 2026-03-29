@@ -1,40 +1,25 @@
-"use client";
-
-import { use, useState } from "react";
+import { notFound, redirect } from "next/navigation";
 import { mockSessions } from "../mock-data";
-import { FollowUpInput } from "./components/FollowUpInput";
-import { SessionChat } from "./components/SessionChat";
-import { SessionDiff } from "./components/SessionDiff";
-import { SessionHeader } from "./components/SessionHeader";
-import { SessionTabs } from "./components/SessionTabs";
+import { getAgentsUiAccess } from "../utils/getAgentsUiAccess";
+import { SessionPageContent } from "./components/SessionPageContent";
 
-type ActiveTab = "chat" | "diff";
-
-export default function SessionPage({
+export default async function SessionPage({
 	params,
 }: {
 	params: Promise<{ sessionId: string }>;
 }) {
-	const { sessionId } = use(params);
-	const session = mockSessions.find((s) => s.id === sessionId);
-	const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
+	const { hasAgentsUiAccess } = await getAgentsUiAccess();
 
-	if (!session) {
-		return (
-			<div className="flex flex-1 items-center justify-center">
-				<p className="text-muted-foreground">Session not found</p>
-			</div>
-		);
+	if (!hasAgentsUiAccess) {
+		redirect("/");
 	}
 
-	return (
-		<div className="flex flex-1 flex-col overflow-hidden">
-			<SessionHeader session={session} />
-			<SessionTabs activeTab={activeTab} onTabChange={setActiveTab} />
-			<div className="flex-1 overflow-hidden">
-				{activeTab === "chat" ? <SessionChat /> : <SessionDiff />}
-			</div>
-			{activeTab === "chat" && <FollowUpInput />}
-		</div>
-	);
+	const { sessionId } = await params;
+	const session = mockSessions.find((candidate) => candidate.id === sessionId);
+
+	if (!session) {
+		notFound();
+	}
+
+	return <SessionPageContent session={session} />;
 }

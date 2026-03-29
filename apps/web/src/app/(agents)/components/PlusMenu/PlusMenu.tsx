@@ -7,8 +7,23 @@ import {
 import { PaperclipIcon, PlusIcon } from "lucide-react";
 import { ResponsiveDropdown } from "../ResponsiveDropdown";
 
-export function PlusMenu() {
+type PlusMenuProps = {
+	disabled?: boolean;
+};
+
+export function PlusMenu({ disabled = false }: PlusMenuProps) {
 	const attachments = usePromptInputAttachments();
+
+	if (disabled) {
+		return (
+			<PromptInputButton
+				className="size-[23px] rounded-full border border-transparent bg-foreground/10 p-[5px] shadow-none hover:bg-foreground/20"
+				disabled
+			>
+				<PlusIcon className="size-3.5" />
+			</PromptInputButton>
+		);
+	}
 
 	return (
 		<ResponsiveDropdown
