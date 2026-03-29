@@ -415,7 +415,7 @@ export function ReviewPanel({
 							<Skeleton className="h-11 w-full rounded-sm" />
 							<Skeleton className="h-11 w-full rounded-sm" />
 						</div>
-					) : activeComments.length === 0 ? (
+					) : comments.length === 0 ? (
 						<div className="px-1.5 py-1 text-xs text-muted-foreground">
 							No comments yet.
 						</div>
