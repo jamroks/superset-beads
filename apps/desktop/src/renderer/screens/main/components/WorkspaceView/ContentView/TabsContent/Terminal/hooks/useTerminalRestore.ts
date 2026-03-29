@@ -239,11 +239,7 @@ export function useTerminalRestore({
 				const applyScroll = () => {
 					if (xtermRef.current !== xterm) return;
 					if (restoreSequenceRef.current !== restoreSequence) return;
-					const target = Math.min(
-						saved.viewportY,
-						xterm.buffer.active.baseY,
-					);
-					console.log("[Terminal] restore scroll:", { target, baseY: xterm.buffer.active.baseY });
+					const target = Math.min(saved.viewportY, xterm.buffer.active.baseY);
 					xterm.scrollToLine(target);
 				};
 				// Wait for xterm write queue to drain, then one more frame

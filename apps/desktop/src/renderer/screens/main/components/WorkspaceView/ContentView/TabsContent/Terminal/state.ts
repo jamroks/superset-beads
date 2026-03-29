@@ -21,7 +21,4 @@ export const coldRestoreState = new Map<string, ColdRestoreState>();
  * Stored as absolute viewportY so it points at the same content even when new
  * output is appended at the bottom while the user is on another workspace.
  */
-export const savedViewportOffset = new Map<
-	string,
-	{ viewportY: number }
->();
+export const savedViewportOffset = new Map<string, { viewportY: number }>();

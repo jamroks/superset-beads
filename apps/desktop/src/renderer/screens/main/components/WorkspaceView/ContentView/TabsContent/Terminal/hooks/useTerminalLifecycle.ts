@@ -924,7 +924,6 @@ export function useTerminalLifecycle({
 				const buf = xterm.buffer.active;
 				const isAtBottom = buf.viewportY >= buf.baseY;
 				if (!isAtBottom) {
-					console.log("[Terminal] save scroll:", { paneId, viewportY: buf.viewportY, baseY: buf.baseY });
 					savedViewportOffset.set(paneId, { viewportY: buf.viewportY });
 				}
 			} else {
