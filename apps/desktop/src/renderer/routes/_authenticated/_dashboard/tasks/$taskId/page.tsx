@@ -1,19 +1,22 @@
-import { Button } from "@superset/ui/button";
+import type {
+	SelectTask,
+	SelectTaskStatus,
+	SelectUser,
+} from "@superset/db/schema";
 import { ScrollArea } from "@superset/ui/scroll-area";
 import { Separator } from "@superset/ui/separator";
 import { eq, or } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { HiArrowLeft } from "react-icons/hi2";
-import { LuExternalLink } from "react-icons/lu";
+import { apiTrpcClient } from "renderer/lib/api-trpc-client";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
-import type { TaskWithStatus } from "../components/TasksView/hooks/useTasksTable";
 import { Route as TasksLayoutRoute } from "../layout";
 import { ActivitySection } from "./components/ActivitySection";
-import { CommentInput } from "./components/CommentInput";
 import { EditableTitle } from "./components/EditableTitle";
 import { PropertiesSidebar } from "./components/PropertiesSidebar";
+import { TaskDetailHeader } from "./components/TaskDetailHeader";
 import { TaskMarkdownRenderer } from "./components/TaskMarkdownRenderer";
 import { useEscapeToNavigate } from "./hooks/useEscapeToNavigate";
 
@@ -23,11 +26,21 @@ export const Route = createFileRoute(
 	component: TaskDetailPage,
 });
 
+type TaskDetailRecord = SelectTask & {
+	status: SelectTaskStatus;
+	assignee: SelectUser | null;
+	creator: SelectUser | null;
+};
+
 function TaskDetailPage() {
 	const { taskId } = Route.useParams();
 	const { tab, assignee, search } = TasksLayoutRoute.useSearch();
 	const navigate = useNavigate();
 	const collections = useCollections();
+	const isUuidTaskId =
+		/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+			taskId,
+		);
 
 	const backSearch = useMemo(() => {
 		const s: Record<string, string> = {};
@@ -49,19 +62,45 @@ function TaskDetailPage() {
 				.leftJoin({ assignee: collections.users }, ({ tasks, assignee }) =>
 					eq(tasks.assigneeId, assignee.id),
 				)
-				.select(({ tasks, status, assignee }) => ({
+				.leftJoin({ creator: collections.users }, ({ tasks, creator }) =>
+					eq(tasks.creatorId, creator.id),
+				)
+				.select(({ tasks, status, assignee, creator }) => ({
 					...tasks,
 					status,
 					assignee: assignee ?? null,
+					creator: creator ?? null,
 				}))
 				.where(({ tasks }) => or(eq(tasks.id, taskId), eq(tasks.slug, taskId))),
 		[collections, taskId],
 	);
 
-	const task: TaskWithStatus | null = useMemo(() => {
+	const task: TaskDetailRecord | null = useMemo(() => {
 		if (!taskData || taskData.length === 0) return null;
-		return taskData[0];
+		const task = taskData[0];
+		return {
+			...task,
+			assignee:
+				typeof task.assignee?.id === "string"
+					? (task.assignee as SelectUser)
+					: null,
+			creator:
+				typeof task.creator?.id === "string"
+					? (task.creator as SelectUser)
+					: null,
+		};
 	}, [taskData]);
+	const taskFallbackQuery = useQuery({
+		queryKey: ["task-detail-fallback", taskId, isUuidTaskId ? "id" : "slug"],
+		queryFn: () =>
+			isUuidTaskId
+				? apiTrpcClient.task.byId.query(taskId)
+				: apiTrpcClient.task.bySlug.query(taskId),
+		enabled: !task,
+		retry: false,
+	});
+	const isTaskSyncing = !task && !!taskFallbackQuery.data;
+	const isTaskLoading = !task && taskFallbackQuery.isPending;
 
 	const handleBack = () => {
 		navigate({ to: "/tasks", search: backSearch });
@@ -81,7 +120,22 @@ function TaskDetailPage() {
 		});
 	};
 
+	const handleDelete = () => {
+		navigate({ to: "/tasks", search: backSearch });
+	};
+	const creatorName = task?.creator?.name?.trim() ? task.creator.name : null;
+
 	if (!task) {
+		if (isTaskLoading || isTaskSyncing) {
+			return (
+				<div className="flex-1 flex items-center justify-center">
+					<span className="text-muted-foreground">
+						{isTaskSyncing ? "Syncing task..." : "Loading task..."}
+					</span>
+				</div>
+			);
+		}
+
 		return (
 			<div className="flex-1 flex items-center justify-center">
 				<span className="text-muted-foreground">Task not found</span>
@@ -92,28 +146,11 @@ function TaskDetailPage() {
 	return (
 		<div className="flex-1 flex min-h-0">
 			<div className="flex-1 flex flex-col min-h-0 min-w-0">
-				<div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-8 w-8"
-						onClick={handleBack}
-					>
-						<HiArrowLeft className="w-4 h-4" />
-					</Button>
-					<span className="text-sm text-muted-foreground">{task.slug}</span>
-					{task.externalUrl && (
-						<a
-							href={task.externalUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-muted-foreground hover:text-foreground transition-colors"
-							title="Open in Linear"
-						>
-							<LuExternalLink className="w-4 h-4" />
-						</a>
-					)}
-				</div>
+				<TaskDetailHeader
+					task={task}
+					onBack={handleBack}
+					onDelete={handleDelete}
+				/>
 
 				<ScrollArea className="flex-1 min-h-0">
 					<div className="px-6 py-6 max-w-4xl">
@@ -124,19 +161,19 @@ function TaskDetailPage() {
 							onSave={handleSaveDescription}
 						/>
 
-						<Separator className="my-8" />
+						{creatorName ? (
+							<>
+								<Separator className="my-8" />
 
-						<h2 className="text-lg font-semibold mb-4">Activity</h2>
+								<h2 className="text-lg font-semibold mb-4">Activity</h2>
 
-						<ActivitySection
-							createdAt={new Date(task.createdAt)}
-							creatorName={task.assignee?.name ?? "Someone"}
-							creatorAvatarUrl={task.assignee?.image}
-						/>
-
-						<div className="mt-6">
-							<CommentInput />
-						</div>
+								<ActivitySection
+									createdAt={new Date(task.createdAt)}
+									creatorName={creatorName}
+									creatorAvatarUrl={task.creator?.image}
+								/>
+							</>
+						) : null}
 					</div>
 				</ScrollArea>
 			</div>

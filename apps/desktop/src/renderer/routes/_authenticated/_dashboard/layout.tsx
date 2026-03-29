@@ -6,10 +6,12 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { useFeatureFlagEnabled } from "posthog-js/react";
+import { useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { DashboardSidebar } from "renderer/routes/_authenticated/_dashboard/components/DashboardSidebar";
 import { ResizablePanel } from "renderer/screens/main/components/ResizablePanel";
 import { WorkspaceSidebar } from "renderer/screens/main/components/WorkspaceSidebar";
+import { DeleteWorkspaceDialog } from "renderer/screens/main/components/WorkspaceSidebar/WorkspaceListItem/components";
 import { useAppHotkey } from "renderer/stores/hotkeys";
 import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
 import {
@@ -93,10 +95,31 @@ function DashboardLayout() {
 		[openNewWorkspaceModal, currentWorkspace?.projectId],
 	);
 
+	const [deleteTarget, setDeleteTarget] = useState<{
+		workspaceId: string;
+		workspaceName: string;
+		workspaceType: "worktree" | "branch";
+	} | null>(null);
+
+	useAppHotkey(
+		"CLOSE_WORKSPACE",
+		() => {
+			if (currentWorkspaceId && currentWorkspace) {
+				setDeleteTarget({
+					workspaceId: currentWorkspaceId,
+					workspaceName: currentWorkspace.name,
+					workspaceType: currentWorkspace.type,
+				});
+			}
+		},
+		{ enabled: !!currentWorkspaceId },
+		[currentWorkspaceId, currentWorkspace],
+	);
+
 	return (
 		<div className="flex flex-col h-full w-full">
 			<TopBar />
-			<div className="flex flex-1 overflow-hidden">
+			<div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
 				{isWorkspaceSidebarOpen && (
 					<ResizablePanel
 						width={workspaceSidebarWidth}
@@ -122,7 +145,20 @@ function DashboardLayout() {
 						)}
 					</ResizablePanel>
 				)}
-				<Outlet />
+				<div className="flex flex-1 min-h-0 min-w-0">
+					<Outlet />
+				</div>
+				{deleteTarget && (
+					<DeleteWorkspaceDialog
+						workspaceId={deleteTarget.workspaceId}
+						workspaceName={deleteTarget.workspaceName}
+						workspaceType={deleteTarget.workspaceType}
+						open={true}
+						onOpenChange={(open) => {
+							if (!open) setDeleteTarget(null);
+						}}
+					/>
+				)}
 			</div>
 		</div>
 	);

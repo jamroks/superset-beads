@@ -1,17 +1,18 @@
-import {
-	AlertDialog,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@superset/ui/alert-dialog";
-import { Button } from "@superset/ui/button";
 import { toast } from "@superset/ui/sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@superset/ui/tabs";
+import { cn } from "@superset/ui/utils";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import {
+	getGitHubPRCommentsQueryPolicy,
+	getGitHubStatusQueryPolicy,
+} from "renderer/lib/githubQueryPolicy";
 import { useWorkspaceFileEvents } from "renderer/screens/main/components/WorkspaceView/hooks/useWorkspaceFileEvents";
+import {
+	checkSummaryIconConfig,
+	countOpenPullRequestComments,
+} from "renderer/screens/main/components/WorkspaceView/RightSidebar/ChangesView/components/ReviewPanel/utils";
 import { useBranchSyncInvalidation } from "renderer/screens/main/hooks/useBranchSyncInvalidation";
 import { useGitChangesStatus } from "renderer/screens/main/hooks/useGitChangesStatus";
 import { useChangesStore } from "renderer/stores/changes";
@@ -22,10 +23,12 @@ import {
 } from "shared/absolute-paths";
 import type { ChangeCategory, ChangedFile } from "shared/changes-types";
 import type { FileSystemChangeEvent } from "shared/file-tree-types";
+import { sidebarHeaderTabTriggerClassName } from "../headerTabStyles";
 import { CategorySection } from "./components/CategorySection";
 import { ChangesHeader } from "./components/ChangesHeader";
 import { CommitInput } from "./components/CommitInput";
-import { PRChecksStatus } from "./components/PRChecksStatus";
+import { DiscardConfirmDialog } from "./components/DiscardConfirmDialog";
+import { ReviewPanel } from "./components/ReviewPanel";
 import { useOrderedSections } from "./hooks";
 import { getPRActionState, shouldAutoCreatePRAfterPublish } from "./utils";
 
@@ -45,6 +48,8 @@ interface PendingChangesRefresh {
 	invalidateBranches: boolean;
 	invalidateSelectedFile: boolean;
 }
+
+type ChangesSidebarTab = "diffs" | "review";
 
 function eventTargetsSelectedFile(
 	event: FileSystemChangeEvent,
@@ -85,6 +90,16 @@ export function ChangesView({
 	);
 	const worktreePath = workspace?.worktreePath;
 	const projectId = workspace?.projectId;
+	const activeTab = useChangesStore((s) => s.activeTab);
+	const isReviewTabActive = isActive && activeTab === "review";
+	const githubStatusQueryPolicy = getGitHubStatusQueryPolicy(
+		"changes-sidebar",
+		{
+			hasWorkspaceId: !!workspaceId,
+			isActive,
+			isReviewTabActive,
+		},
+	);
 
 	const { status, isLoading, effectiveBaseBranch, branchData, refetch } =
 		useGitChangesStatus({
@@ -103,22 +118,8 @@ export function ChangesView({
 		refetch: refetchGithubStatus,
 	} = electronTrpc.workspaces.getGitHubStatus.useQuery(
 		{ workspaceId: workspaceId ?? "" },
-		{
-			enabled: !!workspaceId && isActive,
-			refetchInterval: isActive ? 10000 : false,
-		},
+		githubStatusQueryPolicy,
 	);
-
-	useBranchSyncInvalidation({
-		gitBranch: status?.branch ?? branchData?.currentBranch ?? undefined,
-		workspaceBranch: workspace?.branch,
-		workspaceId: workspaceId ?? "",
-	});
-
-	const handleRefresh = () => {
-		refetch();
-		refetchGithubStatus();
-	};
 
 	const stageAllMutation = electronTrpc.changes.stageAll.useMutation({
 		onSuccess: () => refetch(),
@@ -256,11 +257,50 @@ export function ChangesView({
 	const [showDiscardUnstagedDialog, setShowDiscardUnstagedDialog] =
 		useState(false);
 	const [showDiscardStagedDialog, setShowDiscardStagedDialog] = useState(false);
+	const activePullRequest = githubStatus?.pr ?? null;
+	const githubPRCommentsQueryPolicy = getGitHubPRCommentsQueryPolicy({
+		hasWorkspaceId: !!workspaceId,
+		hasActivePullRequest: !!activePullRequest,
+		isActive,
+		isReviewTabActive,
+	});
 	const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pendingRefreshRef = useRef<PendingChangesRefresh>({
 		invalidateBranches: false,
 		invalidateSelectedFile: false,
 	});
+	const {
+		data: githubComments = [],
+		isLoading: isGitHubCommentsLoading,
+		refetch: refetchGitHubComments,
+	} = electronTrpc.workspaces.getGitHubPRComments.useQuery(
+		{
+			workspaceId: workspaceId ?? "",
+			...(activePullRequest
+				? {
+						prNumber: activePullRequest.number,
+						repoUrl: githubStatus?.repoUrl,
+						upstreamUrl: githubStatus?.upstreamUrl,
+						isFork: githubStatus?.isFork,
+					}
+				: {}),
+		},
+		githubPRCommentsQueryPolicy,
+	);
+
+	useBranchSyncInvalidation({
+		gitBranch: status?.branch ?? branchData?.currentBranch ?? undefined,
+		workspaceBranch: workspace?.branch,
+		workspaceId: workspaceId ?? "",
+	});
+
+	const handleRefresh = () => {
+		refetch();
+		refetchGithubStatus();
+		if (activePullRequest) {
+			refetchGitHubComments();
+		}
+	};
 
 	const handleDiscard = (file: ChangedFile) => {
 		if (!worktreePath) return;
@@ -283,6 +323,7 @@ export function ChangesView({
 		sectionOrder,
 		selectFile,
 		getSelectedFile,
+		setActiveTab,
 		toggleSection,
 		moveSection,
 		setFileListViewMode,
@@ -521,8 +562,7 @@ export function ChangesView({
 	]);
 
 	const hasStagedChanges = stagedFiles.length > 0;
-	const hasExistingPR = !!githubStatus?.pr;
-	const prUrl = githubStatus?.pr?.url;
+	const hasExistingPR = !!activePullRequest;
 	const hasGitHubRepo = !!githubStatus?.repoUrl;
 	const defaultBranch =
 		branchData?.defaultBranch ?? status?.defaultBranch ?? "";
@@ -642,149 +682,175 @@ export function ChangesView({
 		);
 	}
 
+	const againstMainCount = status.againstBase.length;
+	const reviewCommentCount = activePullRequest
+		? countOpenPullRequestComments(githubComments)
+		: 0;
+	const relevantReviewTabChecks =
+		activePullRequest?.checks.filter(
+			(check) => check.status !== "skipped" && check.status !== "cancelled",
+		) ?? [];
+	const reviewTabChecksStatus =
+		relevantReviewTabChecks.length > 0
+			? (activePullRequest?.checksStatus ?? "none")
+			: "none";
+	const reviewTabChecksStatusConfig =
+		checkSummaryIconConfig[reviewTabChecksStatus];
+	const ReviewTabChecksIcon = reviewTabChecksStatusConfig.icon;
+
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
-			<ChangesHeader
-				onRefresh={handleRefresh}
-				viewMode={fileListViewMode}
-				onViewModeChange={setFileListViewMode}
-				worktreePath={worktreePath}
-				pr={githubStatus?.pr ?? null}
-				isPRStatusLoading={isGitHubStatusLoading}
-				canCreatePR={prActionState.canCreatePR}
-				createPRBlockedReason={prActionState.createPRBlockedReason}
-				onStash={() => stashMutation.mutate({ worktreePath })}
-				onStashIncludeUntracked={() =>
-					stashIncludeUntrackedMutation.mutate({ worktreePath })
-				}
-				onStashPop={() => stashPopMutation.mutate({ worktreePath })}
-				isStashPending={
-					stashMutation.isPending ||
-					stashIncludeUntrackedMutation.isPending ||
-					stashPopMutation.isPending
-				}
-			/>
-
-			<div className="border-b border-border">
-				{githubStatus?.pr && <PRChecksStatus pr={githubStatus.pr} />}
-				<CommitInput
-					worktreePath={worktreePath}
-					hasStagedChanges={hasStagedChanges}
-					pushCount={status.pushCount}
-					pullCount={status.pullCount}
-					hasUpstream={status.hasUpstream}
-					hasExistingPR={hasExistingPR}
-					canCreatePR={prActionState.canCreatePR}
-					shouldAutoCreatePRAfterPublish={shouldAutoCreatePR}
-					prUrl={prUrl}
-					onRefresh={handleRefresh}
-				/>
-			</div>
-
-			{!hasChanges ? (
-				<div className="flex-1 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
-					No changes detected
+			<Tabs
+				value={activeTab}
+				onValueChange={(value) => setActiveTab(value as ChangesSidebarTab)}
+				className="flex flex-1 min-h-0 flex-col gap-0"
+			>
+				<div className="h-8 shrink-0 border-b bg-background">
+					<TabsList className="grid h-full w-full grid-cols-2 items-stretch gap-0 rounded-none bg-transparent p-0">
+						<TabsTrigger
+							value="diffs"
+							className={cn(
+								sidebarHeaderTabTriggerClassName,
+								"min-w-0 w-full justify-center",
+							)}
+						>
+							<span>Diffs</span>
+							<span className="text-[11px] text-muted-foreground/60 tabular-nums">
+								{againstMainCount}
+							</span>
+						</TabsTrigger>
+						<TabsTrigger
+							value="review"
+							className={cn(
+								sidebarHeaderTabTriggerClassName,
+								"min-w-0 w-full justify-center",
+							)}
+						>
+							<span>Review</span>
+							<span className="text-[11px] text-muted-foreground/60 tabular-nums">
+								{reviewCommentCount}
+							</span>
+							{activePullRequest ? (
+								<ReviewTabChecksIcon
+									className={cn(
+										"size-3 shrink-0",
+										reviewTabChecksStatusConfig.className,
+										reviewTabChecksStatus === "pending" && "animate-spin",
+									)}
+								/>
+							) : null}
+						</TabsTrigger>
+					</TabsList>
 				</div>
-			) : (
-				<div className="flex-1 overflow-y-auto" data-changes-scroll-container>
-					{orderedSections
-						.filter((section) => section.count > 0)
-						.map((section) => (
-							<CategorySection
-								key={section.id}
-								id={section.id}
-								title={section.title}
-								count={section.count}
-								isExpanded={section.isExpanded}
-								onToggle={section.onToggle}
-								actions={section.actions}
-								onMove={moveSection}
-							>
-								{section.content}
-							</CategorySection>
-						))}
-				</div>
-			)}
 
-			<AlertDialog
+				<TabsContent
+					value="diffs"
+					className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
+				>
+					<div>
+						<ChangesHeader
+							onRefresh={handleRefresh}
+							viewMode={fileListViewMode}
+							onViewModeChange={setFileListViewMode}
+							showViewModeToggle
+							worktreePath={worktreePath}
+							pr={githubStatus?.pr ?? null}
+							isPRStatusLoading={isGitHubStatusLoading}
+							canCreatePR={prActionState.canCreatePR}
+							createPRBlockedReason={prActionState.createPRBlockedReason}
+							onStash={() => stashMutation.mutate({ worktreePath })}
+							onStashIncludeUntracked={() =>
+								stashIncludeUntrackedMutation.mutate({ worktreePath })
+							}
+							onStashPop={() => stashPopMutation.mutate({ worktreePath })}
+							isStashPending={
+								stashMutation.isPending ||
+								stashIncludeUntrackedMutation.isPending ||
+								stashPopMutation.isPending
+							}
+						/>
+					</div>
+					<div className="border-b border-border">
+						<CommitInput
+							worktreePath={worktreePath}
+							hasStagedChanges={hasStagedChanges}
+							pushCount={status.pushCount}
+							pullCount={status.pullCount}
+							hasUpstream={status.hasUpstream}
+							pullRequest={activePullRequest ?? null}
+							canCreatePR={prActionState.canCreatePR}
+							shouldAutoCreatePRAfterPublish={shouldAutoCreatePR}
+							onRefresh={handleRefresh}
+						/>
+					</div>
+
+					{!hasChanges ? (
+						<div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+							No changes detected
+						</div>
+					) : (
+						<div
+							className="flex-1 overflow-y-auto"
+							data-changes-scroll-container
+						>
+							{orderedSections
+								.filter((section) => section.count > 0)
+								.map((section) => (
+									<CategorySection
+										key={section.id}
+										id={section.id}
+										title={section.title}
+										count={section.count}
+										isExpanded={section.isExpanded}
+										onToggle={section.onToggle}
+										actions={section.actions}
+										onMove={moveSection}
+									>
+										{section.content}
+									</CategorySection>
+								))}
+						</div>
+					)}
+				</TabsContent>
+
+				<TabsContent
+					value="review"
+					className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
+				>
+					<ReviewPanel
+						pr={isGitHubStatusLoading ? null : activePullRequest}
+						comments={githubComments}
+						isLoading={isGitHubStatusLoading}
+						isCommentsLoading={isGitHubCommentsLoading}
+					/>
+				</TabsContent>
+			</Tabs>
+
+			<DiscardConfirmDialog
 				open={showDiscardUnstagedDialog}
 				onOpenChange={setShowDiscardUnstagedDialog}
-			>
-				<AlertDialogContent className="max-w-[340px] gap-0 p-0">
-					<AlertDialogHeader className="px-4 pt-4 pb-2">
-						<AlertDialogTitle className="font-medium">
-							Discard all unstaged changes?
-						</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will revert all unstaged modifications and delete untracked
-							files. This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter className="px-4 pb-4 pt-2 flex-row justify-end gap-2">
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-7 px-3 text-xs"
-							onClick={() => setShowDiscardUnstagedDialog(false)}
-						>
-							Cancel
-						</Button>
-						<Button
-							variant="destructive"
-							size="sm"
-							className="h-7 px-3 text-xs"
-							onClick={() => {
-								setShowDiscardUnstagedDialog(false);
-								discardAllUnstagedMutation.mutate({
-									worktreePath: worktreePath || "",
-								});
-							}}
-						>
-							Discard All
-						</Button>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+				title="Discard all unstaged changes?"
+				description="This will revert all unstaged modifications and delete untracked files. This action cannot be undone."
+				onConfirm={() =>
+					discardAllUnstagedMutation.mutate({
+						worktreePath: worktreePath || "",
+					})
+				}
+				confirmLabel="Discard All"
+			/>
 
-			<AlertDialog
+			<DiscardConfirmDialog
 				open={showDiscardStagedDialog}
 				onOpenChange={setShowDiscardStagedDialog}
-			>
-				<AlertDialogContent className="max-w-[340px] gap-0 p-0">
-					<AlertDialogHeader className="px-4 pt-4 pb-2">
-						<AlertDialogTitle className="font-medium">
-							Discard all staged changes?
-						</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will unstage and revert all staged changes. Staged new files
-							will be deleted. This action cannot be undone.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter className="px-4 pb-4 pt-2 flex-row justify-end gap-2">
-						<Button
-							variant="ghost"
-							size="sm"
-							className="h-7 px-3 text-xs"
-							onClick={() => setShowDiscardStagedDialog(false)}
-						>
-							Cancel
-						</Button>
-						<Button
-							variant="destructive"
-							size="sm"
-							className="h-7 px-3 text-xs"
-							onClick={() => {
-								setShowDiscardStagedDialog(false);
-								discardAllStagedMutation.mutate({
-									worktreePath: worktreePath || "",
-								});
-							}}
-						>
-							Discard All
-						</Button>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
+				title="Discard all staged changes?"
+				description="This will unstage and revert all staged changes. Staged new files will be deleted. This action cannot be undone."
+				onConfirm={() =>
+					discardAllStagedMutation.mutate({
+						worktreePath: worktreePath || "",
+					})
+				}
+				confirmLabel="Discard All"
+			/>
 		</div>
 	);
 }

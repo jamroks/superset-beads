@@ -1,8 +1,9 @@
-import { type MutableRefObject, useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { invalidateFileSaveQueries } from "renderer/lib/invalidate-file-save-queries";
+import type { EditorSaveResult } from "renderer/stores/editor-state/types";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import type { ChangeCategory } from "shared/changes-types";
-import type { CodeEditorAdapter } from "../../../../../components";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -11,12 +12,13 @@ interface UseFileSaveParams {
 	filePath: string;
 	paneId: string;
 	diffCategory?: ChangeCategory;
-	editorRef: MutableRefObject<CodeEditorAdapter | null>;
-	originalContentRef: MutableRefObject<string>;
-	originalDiffContentRef: MutableRefObject<string>;
-	draftContentRef: MutableRefObject<string | null>;
-	revisionRef: MutableRefObject<string>;
-	setIsDirty: (dirty: boolean) => void;
+	getCurrentContent: () => string;
+	getRevision: () => string | null;
+	onSaveSuccess: (input: {
+		savedContent: string;
+		currentContent: string;
+		revision: string;
+	}) => void;
 }
 
 export function useFileSave({
@@ -24,28 +26,25 @@ export function useFileSave({
 	filePath,
 	paneId,
 	diffCategory,
-	editorRef,
-	originalContentRef,
-	originalDiffContentRef,
-	draftContentRef,
-	revisionRef,
-	setIsDirty,
+	getCurrentContent,
+	getRevision,
+	onSaveSuccess,
 }: UseFileSaveParams) {
-	const savingFromRawRef = useRef(false);
 	const utils = electronTrpc.useUtils();
 
 	const writeFileMutation = electronTrpc.filesystem.writeFile.useMutation();
 
-	const handleSaveRaw = useCallback(
-		async (options?: { force?: boolean }) => {
-			if (!editorRef.current || !filePath || !workspaceId) return;
-			savingFromRawRef.current = true;
+	const handleSaveFile = useCallback(
+		async (options?: {
+			force?: boolean;
+		}): Promise<EditorSaveResult | undefined> => {
+			if (!filePath || !workspaceId) return;
 
-			const content = editorRef.current.getValue();
+			const content = getCurrentContent();
 			const precondition =
-				options?.force || !revisionRef.current
+				options?.force || !getRevision()
 					? undefined
-					: { ifMatch: revisionRef.current };
+					: { ifMatch: getRevision() as string };
 
 			const result = await writeFileMutation.mutateAsync({
 				workspaceId,
@@ -56,7 +55,6 @@ export function useFileSave({
 			});
 
 			if (!result.ok) {
-				savingFromRawRef.current = false;
 				if (result.reason === "conflict") {
 					try {
 						const currentFile = await utils.filesystem.readFile.fetch({
@@ -76,27 +74,17 @@ export function useFileSave({
 				return undefined;
 			}
 
-			revisionRef.current = result.revision;
-
-			const currentEditorValue = editorRef.current?.getValue() ?? content;
-			const hasUnsavedChanges = currentEditorValue !== content;
-
-			originalContentRef.current = content;
-			setIsDirty(hasUnsavedChanges);
-			if (savingFromRawRef.current && !hasUnsavedChanges) {
-				draftContentRef.current = null;
-			} else if (hasUnsavedChanges) {
-				draftContentRef.current = currentEditorValue;
-			}
-			savingFromRawRef.current = false;
-			originalDiffContentRef.current = "";
-
-			void utils.filesystem.readFile.invalidate({
-				workspaceId,
-				absolutePath: filePath,
+			const currentContent = getCurrentContent();
+			onSaveSuccess({
+				savedContent: content,
+				currentContent,
+				revision: result.revision,
 			});
-			utils.changes.getGitFileContents.invalidate();
-			utils.changes.getStatus.invalidate();
+
+			invalidateFileSaveQueries({
+				workspaceId,
+				filePath,
+			});
 
 			if (diffCategory === "staged") {
 				const panes = useTabsStore.getState().panes;
@@ -120,23 +108,20 @@ export function useFileSave({
 			return { status: "saved" as const };
 		},
 		[
+			diffCategory,
 			filePath,
+			getCurrentContent,
+			getRevision,
+			onSaveSuccess,
+			paneId,
+			utils,
 			workspaceId,
 			writeFileMutation,
-			editorRef,
-			originalContentRef,
-			originalDiffContentRef,
-			draftContentRef,
-			revisionRef,
-			setIsDirty,
-			utils,
-			paneId,
-			diffCategory,
 		],
 	);
 
 	return {
-		handleSaveRaw,
+		handleSaveFile,
 		isSaving: writeFileMutation.isPending,
 	};
 }

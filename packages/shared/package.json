@@ -36,9 +36,17 @@
 			"types": "./src/agent-prompt-template.ts",
 			"default": "./src/agent-prompt-template.ts"
 		},
+		"./task-slug": {
+			"types": "./src/task-slug.ts",
+			"default": "./src/task-slug.ts"
+		},
 		"./claude-command": {
 			"types": "./src/claude-command.ts",
 			"default": "./src/claude-command.ts"
+		},
+		"./vercel-preview-origins": {
+			"types": "./src/vercel-preview-origins.ts",
+			"default": "./src/vercel-preview-origins.ts"
 		}
 	},
 	"scripts": {

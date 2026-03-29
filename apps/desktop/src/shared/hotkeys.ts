@@ -459,6 +459,12 @@ export const HOTKEYS = {
 		label: "Next Workspace",
 		category: "Workspace",
 	}),
+	CLOSE_WORKSPACE: defineHotkey({
+		keys: "meta+backspace",
+		label: "Close Workspace",
+		category: "Workspace",
+		description: "Close or delete the current workspace",
+	}),
 
 	// Layout
 	TOGGLE_SIDEBAR: defineHotkey({
@@ -722,6 +728,12 @@ export const HOTKEYS = {
 		category: "Workspace",
 		description: "Quickly create a workspace in the current project",
 	}),
+	RUN_WORKSPACE_COMMAND: defineHotkey({
+		keys: "meta+g",
+		label: "Run Workspace Command",
+		category: "Workspace",
+		description: "Start or stop the workspace run command",
+	}),
 	FOCUS_TASK_SEARCH: defineHotkey({
 		keys: "meta+f",
 		label: "Focus Task Search",
@@ -801,6 +813,14 @@ export const HOTKEYS = {
 		keys: "meta+i",
 		label: "Link Issue",
 		category: "Terminal",
+	}),
+
+	// Window
+	RELOAD_WINDOW: defineHotkey({
+		keys: "meta+r",
+		label: "Reload Window",
+		category: "Window",
+		description: "Reload the current window",
 	}),
 
 	// Help

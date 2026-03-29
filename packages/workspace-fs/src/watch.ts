@@ -5,6 +5,7 @@ import {
 	type Event as ParcelWatcherEvent,
 	subscribe as subscribeToFilesystem,
 } from "@parcel/watcher";
+import { toErrorMessage } from "./error-message";
 import { normalizeAbsolutePath } from "./paths";
 import {
 	DEFAULT_IGNORE_PATTERNS,
@@ -281,6 +282,7 @@ function internalToFsWatchEvent(event: InternalWatchEvent): FsWatchEvent {
 		kind: event.kind,
 		absolutePath: event.absolutePath,
 		oldAbsolutePath: event.oldAbsolutePath,
+		isDirectory: event.isDirectory,
 	};
 }
 
@@ -371,13 +373,34 @@ export class FsWatcherManager {
 			flushTimer: null,
 		};
 
+		try {
+			const rootStats = await stat(state.absolutePath);
+			if (!rootStats.isDirectory()) {
+				throw new Error(
+					`Cannot watch path: path is not a directory: ${state.absolutePath}`,
+				);
+			}
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				"code" in error &&
+				((error as NodeJS.ErrnoException).code === "ENOENT" ||
+					(error as NodeJS.ErrnoException).code === "ENOTDIR")
+			) {
+				throw new Error(
+					`Cannot watch path: path does not exist: ${state.absolutePath}`,
+				);
+			}
+			throw error;
+		}
+
 		state.subscription = await subscribeToFilesystem(
 			state.absolutePath,
 			(error, events) => {
 				if (error) {
 					console.error("[workspace-fs/watch] Watcher error:", {
 						absolutePath: state.absolutePath,
-						error,
+						error: toErrorMessage(error),
 					});
 					this.emit(state, {
 						events: [{ kind: "overflow", absolutePath: state.absolutePath }],

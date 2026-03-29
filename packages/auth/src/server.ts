@@ -15,6 +15,7 @@ import { PaymentFailedEmail } from "@superset/email/emails/payment-failed";
 import { SubscriptionCancelledEmail } from "@superset/email/emails/subscription-cancelled";
 import { SubscriptionStartedEmail } from "@superset/email/emails/subscription-started";
 import { canInvite, type OrganizationRole } from "@superset/shared/auth";
+import { getTrustedVercelPreviewOrigins } from "@superset/shared/vercel-preview-origins";
 import { Client } from "@upstash/qstash";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -32,6 +33,10 @@ import { acceptInvitationEndpoint } from "./lib/accept-invitation-endpoint";
 import { generateMagicTokenForInvite } from "./lib/generate-magic-token";
 import { invitationRateLimit } from "./lib/rate-limit";
 import { resend } from "./lib/resend";
+import {
+	resolveSessionOrganizationState,
+	type SessionOrganizationContext,
+} from "./lib/resolve-session-organization-state";
 import { stripeClient } from "./stripe";
 import { formatPrice, getOrganizationOwners } from "./utils";
 
@@ -56,12 +61,13 @@ export const auth = betterAuth({
 		usePlural: true,
 		schema: { ...authSchema, subscriptions },
 	}),
-	trustedOrigins: [
+	trustedOrigins: async (request) => [
 		env.NEXT_PUBLIC_WEB_URL,
 		env.NEXT_PUBLIC_API_URL,
 		env.NEXT_PUBLIC_MARKETING_URL,
 		env.NEXT_PUBLIC_ADMIN_URL,
 		...(env.NEXT_PUBLIC_DESKTOP_URL ? [env.NEXT_PUBLIC_DESKTOP_URL] : []),
+		...getTrustedVercelPreviewOrigins(request?.url ?? env.NEXT_PUBLIC_API_URL),
 		...desktopDevOrigins,
 		"superset://app",
 		"superset://",
@@ -166,6 +172,9 @@ export const auth = betterAuth({
 			enableMetadata: true,
 			enableSessionForAPIKeys: true,
 			defaultPrefix: "sk_live_",
+			rateLimit: {
+				enabled: false,
+			},
 		}),
 		jwt({
 			jwks: {
@@ -206,14 +215,13 @@ export const auth = betterAuth({
 				// Org selection is handled in the consent page, so never redirect to a separate page
 				page: `${env.NEXT_PUBLIC_WEB_URL}/oauth/consent`,
 				shouldRedirect: () => false,
-				consentReferenceId: ({ session }) => {
-					const activeOrganizationId = (
-						session as { activeOrganizationId?: string }
-					).activeOrganizationId;
-					if (!activeOrganizationId) {
-						throw new Error("Organization must be selected before consent");
-					}
-					return activeOrganizationId;
+				consentReferenceId: async ({ user, session }) => {
+					const { activeOrganizationId } =
+						await resolveSessionOrganizationState({
+							userId: user?.id,
+							session: session as SessionOrganizationContext | undefined,
+						});
+					return activeOrganizationId ?? undefined;
 				},
 			},
 			customAccessTokenClaims: ({ referenceId }) => ({
@@ -226,7 +234,7 @@ export const auth = betterAuth({
 			invitationExpiresIn: 60 * 60 * 24 * 7,
 			sendInvitationEmail: async (data) => {
 				const token = await generateMagicTokenForInvite({
-					email: data.email,
+					invitationId: data.id,
 				});
 
 				const inviteLink = `${env.NEXT_PUBLIC_WEB_URL}/accept-invitation/${data.id}?token=${token}`;
@@ -541,30 +549,15 @@ export const auth = betterAuth({
 		bearer(),
 		customSession(async ({ user, session: baseSession }) => {
 			const session = baseSession as typeof sessions.$inferSelect;
-
-			let activeOrganizationId = session.activeOrganizationId;
-
-			const allMemberships = await db.query.members.findMany({
-				where: eq(members.userId, session.userId ?? user.id),
-				orderBy: desc(members.createdAt),
-			});
+			const { activeOrganizationId, allMemberships, membership } =
+				await resolveSessionOrganizationState({
+					userId: session.userId ?? user.id,
+					session,
+				});
 
 			const organizationIds = [
 				...new Set(allMemberships.map((m) => m.organizationId)),
 			];
-
-			// Find membership for active org, or fall back to most recent
-			const membership = activeOrganizationId
-				? allMemberships.find((m) => m.organizationId === activeOrganizationId)
-				: allMemberships[0];
-
-			if (!activeOrganizationId && membership?.organizationId) {
-				activeOrganizationId = membership.organizationId;
-				await db
-					.update(authSchema.sessions)
-					.set({ activeOrganizationId })
-					.where(eq(authSchema.sessions.id, session.id));
-			}
 
 			let plan: string | null = null;
 			if (activeOrganizationId) {

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import type { GitHubStatus } from "@superset/local-db";
 import { workspaces, worktrees } from "@superset/local-db";
 import { and, eq, isNull } from "drizzle-orm";
 import { localDb } from "main/lib/local-db";
@@ -17,7 +18,76 @@ import {
 	listExternalWorktrees,
 	refreshDefaultBranch,
 } from "../utils/git";
-import { fetchGitHubPRStatus } from "../utils/github";
+import {
+	fetchGitHubPRComments,
+	fetchGitHubPRStatus,
+	type PullRequestCommentsTarget,
+} from "../utils/github";
+
+const gitHubPRCommentsInputSchema = z.object({
+	workspaceId: z.string(),
+	prNumber: z.number().int().positive().optional(),
+	repoUrl: z.string().optional(),
+	upstreamUrl: z.string().optional(),
+	isFork: z.boolean().optional(),
+});
+
+function resolveCommentsPullRequestTarget({
+	input,
+	githubStatus,
+}: {
+	input: z.infer<typeof gitHubPRCommentsInputSchema>;
+	githubStatus: GitHubStatus | null | undefined;
+}): PullRequestCommentsTarget | null {
+	const prNumber = input.prNumber ?? githubStatus?.pr?.number;
+	if (!prNumber) {
+		return null;
+	}
+
+	const repoUrl = input.repoUrl ?? githubStatus?.repoUrl;
+	if (!repoUrl) {
+		return null;
+	}
+
+	const upstreamUrl =
+		input.upstreamUrl ?? githubStatus?.upstreamUrl ?? githubStatus?.repoUrl;
+	if (!upstreamUrl) {
+		return null;
+	}
+
+	return {
+		prNumber,
+		repoContext: {
+			repoUrl,
+			upstreamUrl,
+			isFork: input.isFork ?? githubStatus?.isFork ?? false,
+		},
+	};
+}
+
+function stripGitHubStatusTimestamp(
+	status: GitHubStatus | null | undefined,
+): Omit<GitHubStatus, "lastRefreshed"> | null {
+	if (!status) {
+		return null;
+	}
+
+	const { lastRefreshed: _lastRefreshed, ...rest } = status;
+	return rest;
+}
+
+function hasMeaningfulGitHubStatusChange({
+	current,
+	next,
+}: {
+	current: GitHubStatus | null | undefined;
+	next: GitHubStatus;
+}): boolean {
+	return (
+		JSON.stringify(stripGitHubStatusTimestamp(current)) !==
+		JSON.stringify(stripGitHubStatusTimestamp(next))
+	);
+}
 
 export const createGitStatusProcedures = () => {
 	return router({
@@ -119,7 +189,13 @@ export const createGitStatusProcedures = () => {
 
 				const freshStatus = await fetchGitHubPRStatus(worktree.path);
 
-				if (freshStatus) {
+				if (
+					freshStatus &&
+					hasMeaningfulGitHubStatusChange({
+						current: worktree.githubStatus,
+						next: freshStatus,
+					})
+				) {
 					localDb
 						.update(worktrees)
 						.set({ githubStatus: freshStatus })
@@ -128,6 +204,32 @@ export const createGitStatusProcedures = () => {
 				}
 
 				return freshStatus;
+			}),
+
+		getGitHubPRComments: publicProcedure
+			.input(gitHubPRCommentsInputSchema)
+			.query(async ({ input }) => {
+				const workspace = getWorkspace(input.workspaceId);
+				if (!workspace) {
+					return [];
+				}
+
+				const worktree = workspace.worktreeId
+					? getWorktree(workspace.worktreeId)
+					: null;
+				if (!worktree) {
+					return [];
+				}
+
+				const cachedGitHubStatus = worktree.githubStatus ?? null;
+
+				return fetchGitHubPRComments({
+					worktreePath: worktree.path,
+					pullRequest: resolveCommentsPullRequestTarget({
+						input,
+						githubStatus: cachedGitHubStatus,
+					}),
+				});
 			}),
 
 		getWorktreeInfo: publicProcedure
