@@ -9,32 +9,66 @@ import {
 	test,
 } from "bun:test";
 
+type GetCurrentBranch =
+	typeof import("../../workspaces/utils/git").getCurrentBranch;
+type ExecGitWithShellPath =
+	typeof import("../../workspaces/utils/git-client").execGitWithShellPath;
+type GetPRForBranch =
+	typeof import("../../workspaces/utils/github").getPRForBranch;
+type GetPullRequestRepoArgs =
+	typeof import("../../workspaces/utils/github").getPullRequestRepoArgs;
+type GetRepoContext =
+	typeof import("../../workspaces/utils/github").getRepoContext;
+type ExecWithShellEnv =
+	typeof import("../../workspaces/utils/shell-env").execWithShellEnv;
+type IsNoPullRequestFoundMessage =
+	typeof import("../git-utils").isNoPullRequestFoundMessage;
+type ClearWorktreeStatusCaches =
+	typeof import("./worktree-status-caches").clearWorktreeStatusCaches;
+
 const getCurrentBranchMock = mock(
-	(async () => null) as (...args: unknown[]) => Promise<string | null>,
+	(async (..._args: Parameters<GetCurrentBranch>) => null) as GetCurrentBranch,
 );
-const execGitWithShellPathMock = mock((async () => ({
+const execGitWithShellPathMock = mock((async (
+	..._args: Parameters<ExecGitWithShellPath>
+) => ({
 	stdout: "",
 	stderr: "",
-})) as (...args: unknown[]) => Promise<{ stdout: string; stderr: string }>);
+})) as ExecGitWithShellPath);
 const getRepoContextMock = mock(
-	(async () => null) as (...args: unknown[]) => Promise<{
-		isFork: boolean;
-		repoUrl: string;
-		upstreamUrl: string;
-	} | null>,
+	(async (..._args: Parameters<GetRepoContext>) => null) as GetRepoContext,
 );
 const getPRForBranchMock = mock(
-	(async () => null) as (...args: unknown[]) => Promise<{
-		number: number;
-		state: "open" | "closed" | "merged";
-	} | null>,
+	(async (..._args: Parameters<GetPRForBranch>) => null) as GetPRForBranch,
 );
-const getPullRequestRepoArgsMock = mock(() => [] as string[]);
-const execWithShellEnvMock = mock(
-	(async () => undefined) as (...args: unknown[]) => Promise<void>,
+const getPullRequestRepoArgsMock = mock(((
+	..._args: Parameters<GetPullRequestRepoArgs>
+) => []) as GetPullRequestRepoArgs);
+const execWithShellEnvMock = mock((async (
+	..._args: Parameters<ExecWithShellEnv>
+) => ({
+	stdout: "",
+	stderr: "",
+})) as ExecWithShellEnv);
+const isNoPullRequestFoundMessageMock = mock(
+	((..._args: Parameters<IsNoPullRequestFoundMessage>) =>
+		false) as IsNoPullRequestFoundMessage,
 );
-const isNoPullRequestFoundMessageMock = mock(() => false);
-const clearWorktreeStatusCachesMock = mock(() => undefined);
+const clearWorktreeStatusCachesMock = mock(
+	((..._args: Parameters<ClearWorktreeStatusCaches>) =>
+		undefined) as ClearWorktreeStatusCaches,
+);
+const openPullRequest = {
+	number: 42,
+	title: "Test PR",
+	url: "https://github.com/superset-sh/superset/pull/42",
+	state: "open" as const,
+	additions: 0,
+	deletions: 0,
+	reviewDecision: "pending" as const,
+	checksStatus: "none" as const,
+	checks: [],
+};
 let mergePullRequest: typeof import("./merge-pull-request").mergePullRequest;
 
 describe("mergePullRequest", () => {
@@ -122,7 +156,10 @@ describe("mergePullRequest", () => {
 		getPullRequestRepoArgsMock.mockReset();
 		getPullRequestRepoArgsMock.mockReturnValue([]);
 		execWithShellEnvMock.mockReset();
-		execWithShellEnvMock.mockResolvedValue(undefined);
+		execWithShellEnvMock.mockResolvedValue({
+			stdout: "",
+			stderr: "",
+		});
 		isNoPullRequestFoundMessageMock.mockReset();
 		isNoPullRequestFoundMessageMock.mockReturnValue(false);
 		clearWorktreeStatusCachesMock.mockReset();
@@ -155,10 +192,7 @@ describe("mergePullRequest", () => {
 		execGitWithShellPathMock.mockRejectedValueOnce(
 			new Error("fatal: ambiguous argument 'HEAD'"),
 		);
-		getPRForBranchMock.mockResolvedValue({
-			number: 42,
-			state: "open",
-		});
+		getPRForBranchMock.mockResolvedValue(openPullRequest);
 
 		const result = await mergePullRequest({
 			worktreePath: "/tmp/unborn-worktree",

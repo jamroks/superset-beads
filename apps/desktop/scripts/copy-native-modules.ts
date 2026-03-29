@@ -178,6 +178,20 @@ function copyDependencyForPackage(
 		return;
 	}
 
+	if (!topLevelVersion) {
+		console.log(
+			`  ${dependencyName}: top-level version missing; materializing ${dependencyRange} at the workspace root`,
+		);
+		copyExactModuleVersion(
+			nodeModulesDir,
+			dependencyName,
+			dependencyRange,
+			topLevelDependencyPath,
+			required,
+		);
+		return;
+	}
+
 	const nestedDependencyPath = join(
 		nodeModulesDir,
 		parentModuleName,
