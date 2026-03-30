@@ -10,7 +10,7 @@ import {
 	sanitizeBranchName,
 	sanitizeBranchNameWithMaxLength,
 } from "shared/utils/branch";
-import type { StatusResult } from "simple-git";
+import type { SimpleGit, StatusResult } from "simple-git";
 import { runWithPostCheckoutHookTolerance } from "../../utils/git-hook-tolerance";
 import { execGitWithShellPath, getSimpleGitWithShellPath } from "./git-client";
 import { execWithShellEnv, getProcessEnvWithShellPath } from "./shell-env";
@@ -916,6 +916,38 @@ export async function hasOriginRemote(mainRepoPath: string): Promise<boolean> {
 	}
 }
 
+async function getOriginHeadBranch(git: SimpleGit): Promise<string | null> {
+	try {
+		const headRef = (
+			await git.raw(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+		).trim();
+		if (!headRef) {
+			return null;
+		}
+		return headRef.startsWith("origin/")
+			? headRef.slice("origin/".length)
+			: headRef;
+	} catch {
+		return null;
+	}
+}
+
+function parseLsRemoteHeadSymref(output: string): string | null {
+	for (const line of output.split("\n")) {
+		const [refInfo, target] = line.split("\t");
+		if (target !== "HEAD") {
+			continue;
+		}
+
+		const prefix = "ref: refs/heads/";
+		if (refInfo?.startsWith(prefix)) {
+			return refInfo.slice(prefix.length).trim();
+		}
+	}
+
+	return null;
+}
+
 export async function getDefaultBranch(mainRepoPath: string): Promise<string> {
 	const git = await getSimpleGitWithShellPath(mainRepoPath);
 
@@ -923,25 +955,10 @@ export async function getDefaultBranch(mainRepoPath: string): Promise<string> {
 	const hasRemote = await hasOriginRemote(mainRepoPath);
 
 	if (hasRemote) {
-		// Try to get the default branch from origin/HEAD
-		try {
-			const headRef = await git.raw([
-				"symbolic-ref",
-				"refs/remotes/origin/HEAD",
-			]);
-			const match = headRef.trim().match(/refs\/remotes\/origin\/(.+)/);
-			if (match) return match[1];
-		} catch {}
-
-		// Query the remote for its actual default branch (authoritative)
-		try {
-			const result = await git.raw(["ls-remote", "--symref", "origin", "HEAD"]);
-			const symrefMatch = result.match(/ref:\s+refs\/heads\/(.+?)\tHEAD/);
-			if (symrefMatch) {
-				return symrefMatch[1];
-			}
-		} catch (error) {
-			console.warn("Failed to resolve default branch via ls-remote", error);
+		// Prefer the locally cached remote HEAD to keep this lookup offline and fast.
+		const originHeadBranch = await getOriginHeadBranch(git);
+		if (originHeadBranch) {
+			return originHeadBranch;
 		}
 
 		// Fallback: check remote tracking branches for common default branch names
@@ -1013,19 +1030,18 @@ export async function refreshDefaultBranch(
 		// sync it to detect when the remote's default branch changes
 		await git.remote(["set-head", "origin", "--auto"]);
 
-		const headRef = await git.raw(["symbolic-ref", "refs/remotes/origin/HEAD"]);
-		const match = headRef.trim().match(/refs\/remotes\/origin\/(.+)/);
-		if (match) {
-			return match[1];
+		const originHeadBranch = await getOriginHeadBranch(git);
+		if (originHeadBranch) {
+			return originHeadBranch;
 		}
 	} catch {
 		// set-head requires network access; fall back to ls-remote which may
 		// work in some edge cases or provide a more specific error
 		try {
 			const result = await git.raw(["ls-remote", "--symref", "origin", "HEAD"]);
-			const symrefMatch = result.match(/ref:\s+refs\/heads\/(.+?)\tHEAD/);
-			if (symrefMatch) {
-				return symrefMatch[1];
+			const remoteHeadBranch = parseLsRemoteHeadSymref(result);
+			if (remoteHeadBranch) {
+				return remoteHeadBranch;
 			}
 		} catch {
 			// Network unavailable - caller will use cached value

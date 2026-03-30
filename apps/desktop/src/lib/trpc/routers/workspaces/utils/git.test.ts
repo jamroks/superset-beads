@@ -18,6 +18,7 @@ import {
 	isUnbornHeadError,
 	parsePorcelainStatusV2,
 	parsePrUrl,
+	refreshDefaultBranch,
 } from "./git";
 
 const TEST_DIR = join(
@@ -45,57 +46,47 @@ function seedCommit(repoPath: string): void {
 	});
 }
 
-describe("getDefaultBranch", () => {
-	// Import simpleGit directly to bypass any module mocks from other test files
-	const { simpleGit } = require("simple-git");
+// Import simpleGit directly to bypass any module mocks from other test files
+const { simpleGit } = require("simple-git");
 
-	// Inline implementation for testing to avoid mock interference
-	async function getDefaultBranchForTest(
-		mainRepoPath: string,
-	): Promise<string> {
-		const git = simpleGit(mainRepoPath);
+// Inline implementation for testing to avoid mock interference
+async function getDefaultBranchForTest(mainRepoPath: string): Promise<string> {
+	const git = simpleGit(mainRepoPath);
 
-		try {
-			const headRef = await git.raw([
-				"symbolic-ref",
-				"refs/remotes/origin/HEAD",
-			]);
-			const match = headRef.trim().match(/refs\/remotes\/origin\/(.+)/);
-			if (match) return match[1];
-		} catch {
-			// origin/HEAD not set, continue to fallback
+	try {
+		const headRef = (
+			await git.raw(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+		).trim();
+		if (headRef.startsWith("origin/")) {
+			return headRef.slice("origin/".length);
 		}
-
-		// Query the remote for its actual default branch (authoritative)
-		try {
-			const result = await git.raw(["ls-remote", "--symref", "origin", "HEAD"]);
-			const symrefMatch = result.match(/ref:\s+refs\/heads\/(.+?)\tHEAD/);
-			if (symrefMatch) {
-				return symrefMatch[1];
-			}
-		} catch {
-			// ls-remote failed (e.g. fake remote URL), fall through
+		if (headRef) {
+			return headRef;
 		}
-
-		// Fallback: check remote tracking branches for common default branch names
-		try {
-			const branches = await git.branch(["-r"]);
-			const remoteBranches = branches.all.map((b: string) =>
-				b.replace("origin/", ""),
-			);
-
-			for (const candidate of ["main", "master", "develop", "trunk"]) {
-				if (remoteBranches.includes(candidate)) {
-					return candidate;
-				}
-			}
-		} catch {
-			// Failed to list branches
-		}
-
-		return "main";
+	} catch {
+		// origin/HEAD not set, continue to fallback
 	}
 
+	// Fallback: check remote tracking branches for common default branch names
+	try {
+		const branches = await git.branch(["-r"]);
+		const remoteBranches = branches.all.map((b: string) =>
+			b.replace("origin/", ""),
+		);
+
+		for (const candidate of ["main", "master", "develop", "trunk"]) {
+			if (remoteBranches.includes(candidate)) {
+				return candidate;
+			}
+		}
+	} catch {
+		// Failed to list branches
+	}
+
+	return "main";
+}
+
+describe("getDefaultBranch", () => {
 	function createIsolatedTestRepo(testName: string): {
 		repoPath: string;
 		cleanup: () => void;
@@ -249,11 +240,10 @@ describe("getDefaultBranch", () => {
 			cleanup();
 		}
 	});
+});
 
-	test("returns develop when it is the remote default, even if main branch also exists (#3031)", async () => {
-		// Reproduce: repo where 'develop' is the actual remote default branch
-		// but 'main' also exists. Without the fix, the hardcoded candidate list
-		// returns 'main' because it appears before 'develop'.
+describe("refreshDefaultBranch", () => {
+	test("updates origin/HEAD to develop when it is the remote default, even if main also exists (#3031)", async () => {
 		const testDir = join(
 			realpathSync(tmpdir()),
 			`superset-test-develop-default-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -264,10 +254,7 @@ describe("getDefaultBranch", () => {
 		const localRepo = join(testDir, "local");
 
 		try {
-			// Create a bare remote with 'develop' as the default branch
 			execSync(`git init --bare "${bareRemote}"`, { stdio: "ignore" });
-
-			// Clone and seed a commit on 'develop'
 			execSync(`git clone "${bareRemote}" "${localRepo}"`, { stdio: "ignore" });
 			execSync("git config user.email 'test@test.com'", {
 				cwd: localRepo,
@@ -277,7 +264,7 @@ describe("getDefaultBranch", () => {
 				cwd: localRepo,
 				stdio: "ignore",
 			});
-			// Create and push the 'develop' branch
+
 			execSync("git checkout -b develop", {
 				cwd: localRepo,
 				stdio: "ignore",
@@ -292,25 +279,19 @@ describe("getDefaultBranch", () => {
 				stdio: "ignore",
 			});
 
-			// Also create a 'main' branch on the remote
 			execSync("git checkout -b main && git push -u origin main", {
 				cwd: localRepo,
 				stdio: "ignore",
 			});
-
-			// Set the remote's HEAD to 'develop' (the actual default branch)
 			execSync("git symbolic-ref HEAD refs/heads/develop", {
 				cwd: bareRemote,
 				stdio: "ignore",
 			});
-
-			// Go back to develop locally
 			execSync("git checkout develop", {
 				cwd: localRepo,
 				stdio: "ignore",
 			});
 
-			// Remove origin/HEAD so we exercise the ls-remote fallback path
 			try {
 				execSync("git remote set-head origin --delete", {
 					cwd: localRepo,
@@ -320,8 +301,9 @@ describe("getDefaultBranch", () => {
 				// ok if it wasn't set
 			}
 
-			const result = await getDefaultBranchForTest(localRepo);
-			expect(result).toBe("develop");
+			expect(await getDefaultBranchForTest(localRepo)).toBe("main");
+			expect(await refreshDefaultBranch(localRepo)).toBe("develop");
+			expect(await getDefaultBranchForTest(localRepo)).toBe("develop");
 		} finally {
 			if (existsSync(testDir)) {
 				rmSync(testDir, { recursive: true, force: true });
