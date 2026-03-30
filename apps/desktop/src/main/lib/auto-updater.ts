@@ -61,7 +61,11 @@ function isNetworkError(error: Error | string): boolean {
 
 let currentStatus: AutoUpdateStatus = AUTO_UPDATE_STATUS.IDLE;
 let currentVersion: string | undefined;
-let isDismissed = false;
+let dismissedVersion: string | undefined;
+
+function isDismissedVersion(version?: string): boolean {
+	return dismissedVersion !== undefined && version === dismissedVersion;
+}
 
 function emitStatus(
 	status: AutoUpdateStatus,
@@ -71,7 +75,7 @@ function emitStatus(
 	currentStatus = status;
 	currentVersion = version;
 
-	if (isDismissed && status === AUTO_UPDATE_STATUS.READY) {
+	if (isDismissedVersion(version) && status === AUTO_UPDATE_STATUS.READY) {
 		return;
 	}
 
@@ -79,7 +83,10 @@ function emitStatus(
 }
 
 export function getUpdateStatus(): AutoUpdateStatusEvent {
-	if (isDismissed && currentStatus === AUTO_UPDATE_STATUS.READY) {
+	if (
+		isDismissedVersion(currentVersion) &&
+		currentStatus === AUTO_UPDATE_STATUS.READY
+	) {
 		return { status: AUTO_UPDATE_STATUS.IDLE };
 	}
 	return { status: currentStatus, version: currentVersion };
@@ -97,7 +104,7 @@ export function installUpdate(): void {
 }
 
 export function dismissUpdate(): void {
-	isDismissed = true;
+	dismissedVersion = currentVersion;
 	autoUpdateEmitter.emit("status-changed", { status: AUTO_UPDATE_STATUS.IDLE });
 }
 
@@ -105,7 +112,6 @@ export function checkForUpdates(): void {
 	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
 		return;
 	}
-	isDismissed = false;
 	emitStatus(AUTO_UPDATE_STATUS.CHECKING);
 	autoUpdater.checkForUpdates().catch((error) => {
 		if (isNetworkError(error)) {
@@ -136,7 +142,6 @@ export function checkForUpdatesInteractive(): void {
 		return;
 	}
 
-	isDismissed = false;
 	emitStatus(AUTO_UPDATE_STATUS.CHECKING);
 
 	autoUpdater
@@ -179,19 +184,19 @@ export function checkForUpdatesInteractive(): void {
 
 export function simulateUpdateReady(): void {
 	if (env.NODE_ENV !== "development") return;
-	isDismissed = false;
+	dismissedVersion = undefined;
 	emitStatus(AUTO_UPDATE_STATUS.READY, "99.0.0-test");
 }
 
 export function simulateDownloading(): void {
 	if (env.NODE_ENV !== "development") return;
-	isDismissed = false;
+	dismissedVersion = undefined;
 	emitStatus(AUTO_UPDATE_STATUS.DOWNLOADING, "99.0.0-test");
 }
 
 export function simulateError(): void {
 	if (env.NODE_ENV !== "development") return;
-	isDismissed = false;
+	dismissedVersion = undefined;
 	emitStatus(
 		AUTO_UPDATE_STATUS.ERROR,
 		undefined,
