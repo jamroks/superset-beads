@@ -88,4 +88,3 @@ superset-dev-data/
 
 # Amp workspace config (track shared settings; ignore runtime state)
 .amp/*
-!.amp/settings.json
