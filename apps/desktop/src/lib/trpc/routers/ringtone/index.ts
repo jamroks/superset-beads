@@ -106,7 +106,13 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 
 				if (error) {
 					// paplay failed, try aplay as fallback
-					// Note: aplay doesn't support volume control, so sound plays at system volume
+					// Note: aplay doesn't support volume control
+					// Respect volume=0 by not playing at all
+					if (volume === 0) {
+						currentSession = null;
+						return;
+					}
+					// For other volumes, play at system volume (can't be controlled)
 					currentSession.process = execFile("aplay", [soundPath], () => {
 						if (currentSession?.id === sessionId) {
 							currentSession = null;

@@ -82,7 +82,13 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 			["--volume", paVolume.toString(), soundPath],
 			(error) => {
 				if (error) {
-					// paplay failed, try aplay as fallback (aplay doesn't have volume control)
+					// paplay failed, try aplay as fallback
+					// Note: aplay doesn't support volume control
+					// Respect volume=0 by not playing at all
+					if (volume === 0) {
+						return;
+					}
+					// For other volumes, play at system volume (can't be controlled)
 					execFile("aplay", [soundPath]);
 				}
 			},
