@@ -327,6 +327,164 @@ describe("setupCopyHandler", () => {
 	});
 });
 
+/**
+ * Tests for terminal scroll position preservation during resize.
+ *
+ * Reproduces: https://github.com/anthropics/claude-code/issues/3057
+ *
+ * When the terminal container resizes (e.g. sidebar toggle, window resize),
+ * fitAddon.fit() is called which can reset the viewport scroll position.
+ * The resize handler must preserve the user's scroll position when they
+ * are NOT at the bottom of the scrollback buffer.
+ */
+describe("setupResizeHandlers scroll preservation", () => {
+	interface MockBuffer {
+		viewportY: number;
+		baseY: number;
+	}
+
+	function createMockTerminal(opts?: { viewportY?: number; baseY?: number }) {
+		const buffer: MockBuffer = {
+			viewportY: opts?.viewportY ?? 0,
+			baseY: opts?.baseY ?? 0,
+		};
+		return {
+			buffer: { active: buffer },
+			cols: 80,
+			rows: 24,
+			scrollToBottom: mock(() => {
+				buffer.viewportY = buffer.baseY;
+			}),
+			scrollToLine: mock((line: number) => {
+				buffer.viewportY = Math.max(0, Math.min(line, buffer.baseY));
+			}),
+		};
+	}
+
+	function createMockFitAddon(
+		terminal: ReturnType<typeof createMockTerminal>,
+		opts?: { resetsViewport?: boolean },
+	) {
+		return {
+			fit: mock(() => {
+				if (opts?.resetsViewport) {
+					terminal.buffer.active.viewportY = 0;
+				}
+			}),
+		};
+	}
+
+	/**
+	 * Simulates the resize handler logic from setupResizeHandlers (BEFORE the fix).
+	 * The old code only restored scroll when the user was at the bottom.
+	 */
+	function resizeHandlerBefore(
+		xterm: ReturnType<typeof createMockTerminal>,
+		fitAddon: ReturnType<typeof createMockFitAddon>,
+	) {
+		const buffer = xterm.buffer.active;
+		const wasAtBottom = buffer.viewportY >= buffer.baseY;
+		fitAddon.fit();
+		if (wasAtBottom) {
+			xterm.scrollToBottom();
+		}
+	}
+
+	/**
+	 * Simulates the resize handler logic from setupResizeHandlers (AFTER the fix).
+	 * The new code preserves scroll position when the user is NOT at the bottom.
+	 */
+	function resizeHandlerAfter(
+		xterm: ReturnType<typeof createMockTerminal>,
+		fitAddon: ReturnType<typeof createMockFitAddon>,
+	) {
+		const buffer = xterm.buffer.active;
+		const wasAtBottom = buffer.viewportY >= buffer.baseY;
+		const prevViewportY = buffer.viewportY;
+		fitAddon.fit();
+		if (wasAtBottom) {
+			xterm.scrollToBottom();
+		} else if (buffer.viewportY !== prevViewportY) {
+			xterm.scrollToLine(Math.min(prevViewportY, buffer.baseY));
+		}
+	}
+
+	describe("when user is at the bottom of scrollback", () => {
+		it("scrolls to bottom after fit()", () => {
+			const xterm = createMockTerminal({ viewportY: 500, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm);
+
+			resizeHandlerAfter(xterm, fitAddon);
+
+			expect(fitAddon.fit).toHaveBeenCalledTimes(1);
+			expect(xterm.scrollToBottom).toHaveBeenCalledTimes(1);
+			expect(xterm.buffer.active.viewportY).toBe(500);
+		});
+
+		it("scrolls to bottom even when fit() resets viewport", () => {
+			const xterm = createMockTerminal({ viewportY: 500, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm, { resetsViewport: true });
+
+			resizeHandlerAfter(xterm, fitAddon);
+
+			expect(xterm.scrollToBottom).toHaveBeenCalledTimes(1);
+			expect(xterm.buffer.active.viewportY).toBe(500);
+		});
+	});
+
+	describe("when user has scrolled up (NOT at bottom)", () => {
+		it("BUG: old handler loses scroll position when fit() resets viewport", () => {
+			const xterm = createMockTerminal({ viewportY: 250, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm, { resetsViewport: true });
+
+			resizeHandlerBefore(xterm, fitAddon);
+
+			// Old handler does NOT restore scroll when not at bottom
+			expect(xterm.scrollToBottom).not.toHaveBeenCalled();
+			// viewportY is stuck at 0 (the top) — this is the reported bug
+			expect(xterm.buffer.active.viewportY).toBe(0);
+		});
+
+		it("FIX: new handler preserves scroll position after fit() resets viewport", () => {
+			const xterm = createMockTerminal({ viewportY: 250, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm, { resetsViewport: true });
+
+			resizeHandlerAfter(xterm, fitAddon);
+
+			expect(xterm.scrollToBottom).not.toHaveBeenCalled();
+			expect(xterm.scrollToLine).toHaveBeenCalledWith(250);
+			expect(xterm.buffer.active.viewportY).toBe(250);
+		});
+
+		it("FIX: skips scrollToLine when fit() doesn't change viewport", () => {
+			const xterm = createMockTerminal({ viewportY: 250, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm, { resetsViewport: false });
+
+			resizeHandlerAfter(xterm, fitAddon);
+
+			expect(xterm.scrollToBottom).not.toHaveBeenCalled();
+			expect(xterm.scrollToLine).not.toHaveBeenCalled();
+			expect(xterm.buffer.active.viewportY).toBe(250);
+		});
+
+		it("FIX: clamps to new baseY if buffer shrank after fit()", () => {
+			const xterm = createMockTerminal({ viewportY: 400, baseY: 500 });
+			const fitAddon = createMockFitAddon(xterm, { resetsViewport: true });
+			// Simulate buffer shrinking during fit (more rows visible → fewer scrollback lines)
+			fitAddon.fit = mock(() => {
+				xterm.buffer.active.viewportY = 0;
+				xterm.buffer.active.baseY = 300;
+			});
+
+			resizeHandlerAfter(xterm, fitAddon);
+
+			// prevViewportY was 400, but baseY is now 300, so clamp to 300
+			expect(xterm.scrollToLine).toHaveBeenCalledWith(300);
+			expect(xterm.buffer.active.viewportY).toBe(300);
+		});
+	});
+});
+
 describe("setupPasteHandler", () => {
 	function createXtermStub() {
 		const listeners = new Map<string, EventListener>();

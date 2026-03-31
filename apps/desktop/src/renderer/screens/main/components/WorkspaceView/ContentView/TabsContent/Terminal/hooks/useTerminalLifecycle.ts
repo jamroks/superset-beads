@@ -769,6 +769,7 @@ export function useTerminalLifecycle({
 			const prevRows = xterm.rows;
 			const wasAtBottom =
 				xterm.buffer.active.viewportY >= xterm.buffer.active.baseY;
+			const prevViewportY = xterm.buffer.active.viewportY;
 
 			// Rebuild stale WebGL glyph cache after occlusion and force a paint pass.
 			rendererRef.current?.current.clearTextureAtlas?.();
@@ -784,11 +785,21 @@ export function useTerminalLifecycle({
 				xterm.focus();
 			}
 
-			if (!wasAtBottom) return;
-			requestAnimationFrame(() => {
-				if (isUnmounted || xtermRef.current !== xterm) return;
-				scrollToBottom(xterm);
-			});
+			if (wasAtBottom) {
+				requestAnimationFrame(() => {
+					if (isUnmounted || xtermRef.current !== xterm) return;
+					scrollToBottom(xterm);
+				});
+			} else if (xterm.buffer.active.viewportY !== prevViewportY) {
+				// Preserve scroll position when user is scrolled up — fit() can
+				// reset viewportY which would jump the viewport to the top.
+				requestAnimationFrame(() => {
+					if (isUnmounted || xtermRef.current !== xterm) return;
+					xterm.scrollToLine(
+						Math.min(prevViewportY, xterm.buffer.active.baseY),
+					);
+				});
+			}
 		};
 
 		const scheduleReattachRecovery = (forceResize: boolean) => {

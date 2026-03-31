@@ -716,10 +716,18 @@ export function setupResizeHandlers(
 	const debouncedHandleResize = debounce(() => {
 		const buffer = xterm.buffer.active;
 		const wasAtBottom = buffer.viewportY >= buffer.baseY;
+		const prevViewportY = buffer.viewportY;
 		fitAddon.fit();
 		onResize(xterm.cols, xterm.rows);
 		if (wasAtBottom) {
 			requestAnimationFrame(() => scrollToBottom(xterm));
+		} else if (buffer.viewportY !== prevViewportY) {
+			// Preserve scroll position when user is scrolled up — fit() can
+			// reset viewportY which would jump the viewport to the top.
+			// Clamp to new baseY in case the buffer shrank during resize.
+			requestAnimationFrame(() =>
+				xterm.scrollToLine(Math.min(prevViewportY, xterm.buffer.active.baseY)),
+			);
 		}
 	}, RESIZE_DEBOUNCE_MS);
 
