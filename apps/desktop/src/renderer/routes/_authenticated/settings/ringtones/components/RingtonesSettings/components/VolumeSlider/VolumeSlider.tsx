@@ -29,6 +29,8 @@ export function VolumeSlider() {
 					context.previous,
 				);
 			}
+			// Reset local state to re-sync with server on next render
+			setLocalVolume(null);
 		},
 	});
 
