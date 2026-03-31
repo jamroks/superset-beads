@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	VscCheck,
+	VscGitBranch,
 	VscGitStash,
 	VscGitStashApply,
 	VscRefresh,
@@ -151,6 +152,119 @@ function BaseBranchSelector({ worktreePath }: { worktreePath: string }) {
 	);
 }
 
+function BranchSwitcher({ worktreePath }: { worktreePath: string }) {
+	const [open, setOpen] = useState(false);
+	const [search, setSearch] = useState("");
+	const utils = electronTrpc.useUtils();
+	const { data: branchData, isLoading } =
+		electronTrpc.changes.getBranches.useQuery(
+			{ worktreePath },
+			{
+				enabled: !!worktreePath,
+				staleTime: BRANCH_QUERY_STALE_TIME_MS,
+				refetchOnWindowFocus: false,
+			},
+		);
+
+	const switchBranch = electronTrpc.changes.switchBranch.useMutation({
+		onSuccess: () => {
+			utils.changes.getBranches.invalidate({ worktreePath });
+			utils.changes.getStatus.invalidate();
+		},
+	});
+
+	const currentBranch = branchData?.currentBranch;
+
+	const sortedBranches = useMemo(() => {
+		const localBranches = (branchData?.local ?? []).map((b) => b.branch);
+		const remoteBranches = (branchData?.remote ?? []).filter(
+			(b) => !localBranches.includes(b),
+		);
+		const allBranches = [...localBranches, ...remoteBranches];
+		return allBranches.sort((a, b) => {
+			if (a === currentBranch) return -1;
+			if (b === currentBranch) return 1;
+			if (a === branchData?.defaultBranch) return -1;
+			if (b === branchData?.defaultBranch) return 1;
+			return a.localeCompare(b);
+		});
+	}, [
+		branchData?.local,
+		branchData?.remote,
+		branchData?.defaultBranch,
+		currentBranch,
+	]);
+
+	const filteredBranches = useMemo(() => {
+		if (!search) return sortedBranches.filter(Boolean);
+		const lower = search.toLowerCase();
+		return sortedBranches.filter((branch) =>
+			branch?.toLowerCase().includes(lower),
+		);
+	}, [sortedBranches, search]);
+
+	const handleBranchSwitch = (branch: string) => {
+		if (branch === currentBranch) return;
+		switchBranch.mutate({ worktreePath, branch });
+		setOpen(false);
+		setSearch("");
+	};
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<PopoverTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="size-6 p-0"
+							disabled={isLoading || switchBranch.isPending}
+						>
+							<VscGitBranch className="size-3.5" />
+						</Button>
+					</PopoverTrigger>
+				</TooltipTrigger>
+				<TooltipContent side="top" showArrow={false}>
+					Switch branch{currentBranch ? ` (${currentBranch})` : ""}
+				</TooltipContent>
+			</Tooltip>
+			<PopoverContent align="start" className="w-56 p-0">
+				<Command shouldFilter={false}>
+					<CommandInput
+						placeholder="Search branches..."
+						value={search}
+						onValueChange={setSearch}
+					/>
+					<CommandList className="max-h-[200px]">
+						<CommandEmpty>No branches found</CommandEmpty>
+						{filteredBranches.map((branch) => (
+							<CommandItem
+								key={branch}
+								value={branch}
+								onSelect={() => handleBranchSwitch(branch)}
+								className="flex items-center justify-between text-xs"
+							>
+								<span className="truncate">
+									{branch}
+									{branch === branchData?.defaultBranch && (
+										<span className="ml-1 text-muted-foreground">
+											(default)
+										</span>
+									)}
+								</span>
+								{branch === currentBranch && (
+									<VscCheck className="size-3.5 shrink-0 text-primary" />
+								)}
+							</CommandItem>
+						))}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
 function StashDropdown({
 	onStash,
 	onStashIncludeUntracked,
@@ -256,6 +370,7 @@ export function ChangesHeader({
 }: ChangesHeaderProps) {
 	return (
 		<div className="flex items-center gap-0.5 px-2 py-1.5">
+			<BranchSwitcher worktreePath={worktreePath} />
 			<BaseBranchSelector worktreePath={worktreePath} />
 			<StashDropdown
 				onStash={onStash}
