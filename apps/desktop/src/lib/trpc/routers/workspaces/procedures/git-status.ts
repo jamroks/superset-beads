@@ -276,6 +276,7 @@ export const createGitStatusProcedures = () => {
 							and(
 								eq(workspaces.worktreeId, wt.id),
 								isNull(workspaces.deletingAt),
+								isNull(workspaces.closedAt),
 							),
 						)
 						.get();

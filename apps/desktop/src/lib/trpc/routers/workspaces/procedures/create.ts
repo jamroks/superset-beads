@@ -81,6 +81,7 @@ function handleExistingWorktree({
 			and(
 				eq(workspaces.worktreeId, existingWorktree.id),
 				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
 			),
 		)
 		.get();

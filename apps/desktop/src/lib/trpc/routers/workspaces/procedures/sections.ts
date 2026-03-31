@@ -40,7 +40,11 @@ function moveWorkspacesToRootBoundary(
 		.select()
 		.from(workspaces)
 		.where(
-			and(eq(workspaces.projectId, projectId), isNull(workspaces.deletingAt)),
+			and(
+				eq(workspaces.projectId, projectId),
+				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
+			),
 		)
 		.all();
 	const projectSections = localDb

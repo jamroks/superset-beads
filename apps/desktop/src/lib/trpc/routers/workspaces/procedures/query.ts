@@ -5,7 +5,7 @@ import {
 	worktrees,
 } from "@superset/local-db";
 import { TRPCError } from "@trpc/server";
-import { eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { localDb } from "main/lib/local-db";
 import { z } from "zod";
 import { publicProcedure, router } from "../../..";
@@ -28,7 +28,7 @@ function getWorkspacesInVisualOrder(): string[] {
 	const allWorkspaces = localDb
 		.select()
 		.from(workspaces)
-		.where(isNull(workspaces.deletingAt))
+		.where(and(isNull(workspaces.deletingAt), isNull(workspaces.closedAt)))
 		.all();
 
 	const allSections = localDb.select().from(workspaceSections).all();
@@ -90,9 +90,20 @@ export const createQueryProcedures = () => {
 			return localDb
 				.select()
 				.from(workspaces)
-				.where(isNull(workspaces.deletingAt))
+				.where(and(isNull(workspaces.deletingAt), isNull(workspaces.closedAt)))
 				.all()
 				.sort((a, b) => a.tabOrder - b.tabOrder);
+		}),
+
+		getClosed: publicProcedure.query(() => {
+			return localDb
+				.select()
+				.from(workspaces)
+				.where(
+					and(isNull(workspaces.deletingAt), isNotNull(workspaces.closedAt)),
+				)
+				.all()
+				.sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0));
 		}),
 
 		getAllGrouped: publicProcedure.query(() => {
@@ -200,7 +211,7 @@ export const createQueryProcedures = () => {
 			const allWorkspaces = localDb
 				.select()
 				.from(workspaces)
-				.where(isNull(workspaces.deletingAt))
+				.where(and(isNull(workspaces.deletingAt), isNull(workspaces.closedAt)))
 				.all()
 				.sort((a, b) => a.tabOrder - b.tabOrder);
 

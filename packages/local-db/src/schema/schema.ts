@@ -125,6 +125,9 @@ export const workspaces = sqliteTable(
 		// Timestamp when deletion was initiated. Non-null means deletion in progress.
 		// Workspaces with deletingAt set should be filtered out from queries.
 		deletingAt: integer("deleting_at"),
+		// Timestamp when the workspace was closed by the user. Non-null means closed.
+		// Closed workspaces are hidden from the active sidebar but preserved for reopening.
+		closedAt: integer("closed_at"),
 		// Allocated port base for multi-worktree dev instances.
 		// Each workspace gets a range of 10 ports starting from this base.
 		portBase: integer("port_base"),

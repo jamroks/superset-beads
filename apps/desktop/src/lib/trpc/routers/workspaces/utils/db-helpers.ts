@@ -38,7 +38,11 @@ export function getMaxProjectChildTabOrder(projectId: string): number {
 		.select()
 		.from(workspaces)
 		.where(
-			and(eq(workspaces.projectId, projectId), isNull(workspaces.deletingAt)),
+			and(
+				eq(workspaces.projectId, projectId),
+				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
+			),
 		)
 		.all();
 	const projectSections = localDb
@@ -134,6 +138,7 @@ export function selectNextActiveWorkspace(): string | null {
 		.where(
 			and(
 				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
 				isNotNull(projects.tabOrder), // Only visible projects
 			),
 		)
@@ -178,7 +183,13 @@ export function getWorkspaceNotDeleting(
 	return localDb
 		.select()
 		.from(workspaces)
-		.where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletingAt)))
+		.where(
+			and(
+				eq(workspaces.id, workspaceId),
+				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
+			),
+		)
 		.get();
 }
 
@@ -276,6 +287,29 @@ export function deleteWorkspace(workspaceId: string): void {
 }
 
 /**
+ * Close a workspace by setting its closedAt timestamp.
+ * Closed workspaces are preserved in the database but hidden from active views.
+ */
+export function closeWorkspace(workspaceId: string): void {
+	localDb
+		.update(workspaces)
+		.set({ closedAt: Date.now() })
+		.where(eq(workspaces.id, workspaceId))
+		.run();
+}
+
+/**
+ * Reopen a previously closed workspace by clearing its closedAt timestamp.
+ */
+export function reopenWorkspace(workspaceId: string): void {
+	localDb
+		.update(workspaces)
+		.set({ closedAt: null })
+		.where(eq(workspaces.id, workspaceId))
+		.run();
+}
+
+/**
  * Delete a worktree record from the database.
  */
 export function deleteWorktreeRecord(worktreeId: string): void {
@@ -298,6 +332,7 @@ export function getBranchWorkspace(
 				eq(workspaces.projectId, projectId),
 				eq(workspaces.type, "branch"),
 				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
 			),
 		)
 		.get();
@@ -327,6 +362,7 @@ export function findWorktreeWorkspaceByBranch({
 				eq(workspaces.type, "worktree"),
 				eq(workspaces.branch, branch),
 				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
 			),
 		)
 		.get();
@@ -361,6 +397,7 @@ export function findOrphanedWorktreeByBranch({
 			and(
 				eq(workspaces.worktreeId, worktree.id),
 				isNull(workspaces.deletingAt),
+				isNull(workspaces.closedAt),
 			),
 		)
 		.get();

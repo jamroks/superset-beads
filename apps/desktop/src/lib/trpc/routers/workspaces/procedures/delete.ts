@@ -11,6 +11,7 @@ import { z } from "zod";
 import { publicProcedure, router } from "../../..";
 import {
 	clearWorkspaceDeletingStatus,
+	closeWorkspace,
 	deleteWorkspace,
 	deleteWorktreeRecord,
 	getProject,
@@ -18,6 +19,7 @@ import {
 	getWorktree,
 	hideProjectIfNoWorkspaces,
 	markWorkspaceAsDeleting,
+	reopenWorkspace,
 	updateActiveWorkspaceIfRemoved,
 } from "../utils/db-helpers";
 import {
@@ -360,8 +362,7 @@ export const createDeleteProcedures = () => {
 					.getForWorkspaceId(input.id)
 					.terminal.killByWorkspaceId(input.id);
 
-				deleteWorkspace(input.id);
-				hideProjectIfNoWorkspaces(workspace.projectId);
+				closeWorkspace(input.id);
 				updateActiveWorkspaceIfRemoved(input.id);
 
 				const terminalWarning =
@@ -372,6 +373,26 @@ export const createDeleteProcedures = () => {
 				track("workspace_closed", { workspace_id: input.id });
 
 				return { success: true, terminalWarning };
+			}),
+
+		reopen: publicProcedure
+			.input(z.object({ id: z.string() }))
+			.mutation(({ input }) => {
+				const workspace = getWorkspace(input.id);
+
+				if (!workspace) {
+					throw new Error("Workspace not found");
+				}
+
+				if (!workspace.closedAt) {
+					throw new Error("Workspace is not closed");
+				}
+
+				reopenWorkspace(input.id);
+
+				track("workspace_reopened", { workspace_id: input.id });
+
+				return { success: true };
 			}),
 
 		canDeleteWorktree: publicProcedure

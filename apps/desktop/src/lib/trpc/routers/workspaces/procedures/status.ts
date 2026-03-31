@@ -33,6 +33,7 @@ export const createStatusProcedures = () => {
 						and(
 							eq(workspaces.projectId, projectId),
 							isNull(workspaces.deletingAt),
+							isNull(workspaces.closedAt),
 						),
 					)
 					.all()
@@ -79,6 +80,7 @@ export const createStatusProcedures = () => {
 						and(
 							eq(workspaces.projectId, projectId),
 							isNull(workspaces.deletingAt),
+							isNull(workspaces.closedAt),
 						),
 					)
 					.all();

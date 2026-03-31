@@ -25,6 +25,8 @@ export function WorkspacesListView() {
 	// Fetch all data
 	const { data: groups = [] } =
 		electronTrpc.workspaces.getAllGrouped.useQuery();
+	const { data: closedWorkspaces = [] } =
+		electronTrpc.workspaces.getClosed.useQuery();
 	const { data: allProjects = [] } =
 		electronTrpc.projects.getRecents.useQuery();
 
@@ -48,7 +50,18 @@ export function WorkspacesListView() {
 		},
 	});
 
-	// Combine open workspaces and closed worktrees into a single list
+	const reopenWorkspace = electronTrpc.workspaces.reopen.useMutation({
+		onSuccess: (_data, variables) => {
+			utils.workspaces.invalidate();
+			utils.projects.getRecents.invalidate();
+			navigateToWorkspace(variables.id, navigate);
+		},
+		onError: (error) => {
+			toast.error(`Failed to reopen workspace: ${error.message}`);
+		},
+	});
+
+	// Combine open workspaces, closed workspaces, and orphaned worktrees into a single list
 	const allItems = useMemo<WorkspaceItem[]>(() => {
 		const items: WorkspaceItem[] = [];
 
@@ -73,7 +86,27 @@ export function WorkspacesListView() {
 			}
 		}
 
-		// Add closed worktrees (those without active workspaces)
+		// Add closed workspaces (those with closedAt set)
+		for (const ws of closedWorkspaces) {
+			const project = allProjects.find((p) => p.id === ws.projectId);
+			items.push({
+				uniqueId: ws.id,
+				workspaceId: ws.id,
+				worktreeId: null,
+				projectId: ws.projectId,
+				projectName: project?.name ?? "Unknown",
+				worktreePath: "",
+				type: ws.type as "worktree" | "branch",
+				branch: ws.branch,
+				name: ws.name,
+				lastOpenedAt: ws.closedAt ?? ws.lastOpenedAt,
+				createdAt: ws.createdAt,
+				isUnread: false,
+				isOpen: false,
+			});
+		}
+
+		// Add orphaned worktrees (those without active workspaces)
 		for (let i = 0; i < allProjects.length; i++) {
 			const project = allProjects[i];
 			const worktrees = worktreeQueries[i]?.data;
@@ -103,7 +136,7 @@ export function WorkspacesListView() {
 		}
 
 		return items;
-	}, [groups, allProjects, worktreeQueries]);
+	}, [groups, closedWorkspaces, allProjects, worktreeQueries]);
 
 	// Filter by search query and filter mode
 	const filteredItems = useMemo(() => {
@@ -170,7 +203,11 @@ export function WorkspacesListView() {
 	};
 
 	const handleReopen = (item: WorkspaceItem) => {
-		if (item.worktreeId) {
+		if (item.workspaceId && !item.isOpen) {
+			// Reopen a closed workspace
+			reopenWorkspace.mutate({ id: item.workspaceId });
+		} else if (item.worktreeId) {
+			// Reopen an orphaned worktree
 			openWorktree.mutate({ worktreeId: item.worktreeId });
 		}
 	};
