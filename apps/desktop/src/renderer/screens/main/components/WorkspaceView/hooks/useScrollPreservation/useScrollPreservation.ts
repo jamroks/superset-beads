@@ -35,9 +35,11 @@ export function useScrollPreservation(
 
 		// Restore saved scroll position after the browser paints
 		const saved = scrollCache.get(cacheKey);
+		lastScrollTopRef.current = saved ?? container.scrollTop;
 		if (saved != null) {
 			requestAnimationFrame(() => {
 				container.scrollTop = saved;
+				lastScrollTopRef.current = saved;
 			});
 		}
 
@@ -48,7 +50,13 @@ export function useScrollPreservation(
 
 		return () => {
 			container.removeEventListener("scroll", onScroll);
-			scrollCache.set(cacheKey, lastScrollTopRef.current);
+			const scrollTop = container.scrollTop;
+			lastScrollTopRef.current = scrollTop;
+			if (scrollTop > 0) {
+				scrollCache.set(cacheKey, scrollTop);
+			} else {
+				scrollCache.delete(cacheKey);
+			}
 		};
 	}, [cacheKey, ...deps]);
 }

@@ -51,7 +51,7 @@ import { useFileSave } from "./hooks/useFileSave";
 import { useMarkdownSearch } from "./hooks/useMarkdownSearch";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 
-/** Module-level cache for raw mode (CodeMirror) scroll positions keyed by paneId */
+/** Module-level cache for raw mode (CodeMirror) scroll positions keyed by document context. */
 const rawScrollCache = new Map<string, number>();
 
 interface FileViewerPaneProps {
@@ -173,6 +173,8 @@ export function FileViewerPane({
 			}),
 		[normalizedWorkspaceId, filePath, diffCategory, commitHash, oldPath],
 	);
+	const rawScrollCacheKey = `file-viewer:raw:${documentKey}`;
+	const domScrollCacheKey = `file-viewer:${viewMode}:${documentKey}`;
 	const documentState = useEditorDocumentsStore(
 		(state) => state.documents[documentKey],
 	);
@@ -408,34 +410,44 @@ export function FileViewerPane({
 		lastScrollTopRef.current = scrollTop;
 	}, []);
 
-	// Save raw mode scroll position on unmount, restore on remount
+	// Save raw mode scroll position when the current document changes or unmounts.
 	useEffect(() => {
+		lastScrollTopRef.current = editorRef.current?.getScrollTop() ?? 0;
+
 		return () => {
-			const scrollTop = lastScrollTopRef.current;
-			if (scrollTop != null && scrollTop > 0) {
-				rawScrollCache.set(paneId, scrollTop);
+			const scrollTop =
+				editorRef.current?.getScrollTop() ?? lastScrollTopRef.current ?? 0;
+			if (scrollTop > 0) {
+				rawScrollCache.set(rawScrollCacheKey, scrollTop);
+			} else {
+				rawScrollCache.delete(rawScrollCacheKey);
 			}
+			lastScrollTopRef.current = 0;
 		};
-	}, [paneId]);
+	}, [rawScrollCacheKey]);
 
 	// Restore raw mode scroll position after editor content is ready
 	useEffect(() => {
 		if (viewMode !== "raw" || isLoadingRaw || !rawFileData?.ok) return;
 
-		const saved = rawScrollCache.get(paneId);
-		if (saved == null) return;
-		rawScrollCache.delete(paneId);
+		const saved = rawScrollCache.get(rawScrollCacheKey);
+		if (saved == null) {
+			lastScrollTopRef.current = 0;
+			return;
+		}
+		rawScrollCache.delete(rawScrollCacheKey);
 
 		// Wait for CodeMirror to render the content before restoring
 		requestAnimationFrame(() => {
 			editorRef.current?.setScrollTop(saved);
+			lastScrollTopRef.current = saved;
 		});
-	}, [viewMode, paneId, isLoadingRaw, rawFileData]);
+	}, [viewMode, rawScrollCacheKey, isLoadingRaw, rawFileData]);
 
 	// Preserve scroll position for diff and rendered mode containers across workspace switches
 	useScrollPreservation(
 		viewMode === "diff" ? diffContainerRef : markdownContainerRef,
-		`pane:${paneId}`,
+		domScrollCacheKey,
 		[viewMode, isLoadingDiff, diffData, isLoadingRaw, rawFileData],
 	);
 
