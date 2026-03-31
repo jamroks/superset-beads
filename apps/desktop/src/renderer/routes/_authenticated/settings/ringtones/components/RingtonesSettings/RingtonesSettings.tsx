@@ -319,9 +319,6 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 					</div>
 				)}
 
-				{/* Volume Slider */}
-				{showNotification && !isMuted && <VolumeSlider />}
-
 				{/* Tip */}
 				{showNotification && !isMuted && (
 					<div className="pt-6 border-t">
@@ -331,6 +328,9 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 						</p>
 					</div>
 				)}
+
+				{/* Volume Slider */}
+				{showNotification && !isMuted && <VolumeSlider />}
 			</div>
 		</div>
 	);
