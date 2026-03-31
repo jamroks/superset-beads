@@ -77,12 +77,16 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 	} else {
 		// Linux: paplay --volume accepts 0-65536 (65536 = 100%)
 		const paVolume = Math.round(volumeDecimal * 65536);
-		execFile("paplay", ["--volume", paVolume.toString(), soundPath], (error) => {
-			if (error) {
-				// paplay failed, try aplay as fallback (aplay doesn't have volume control)
-				execFile("aplay", [soundPath]);
-			}
-		});
+		execFile(
+			"paplay",
+			["--volume", paVolume.toString(), soundPath],
+			(error) => {
+				if (error) {
+					// paplay failed, try aplay as fallback (aplay doesn't have volume control)
+					execFile("aplay", [soundPath]);
+				}
+			},
+		);
 	}
 }
 

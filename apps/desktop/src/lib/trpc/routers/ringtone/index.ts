@@ -79,8 +79,7 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 			},
 		);
 	} else if (process.platform === "win32") {
-		// Windows: Use powershell with WindowsMediaPlayer for volume control
-		const volumePercent = Math.round(volume);
+		// Windows: Media.SoundPlayer doesn't support volume control
 		currentSession.process = execFile(
 			"powershell",
 			[
@@ -93,8 +92,6 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 				}
 			},
 		);
-		// Note: Media.SoundPlayer doesn't support volume control
-		// For full volume control on Windows, we'd need Windows Media Player or similar
 	} else {
 		// Linux: paplay --volume accepts 0-65536 (65536 = 100%)
 		const paVolume = Math.round(volumeDecimal * 65536);
@@ -108,7 +105,8 @@ function playSoundFile(soundPath: string, volume: number = 100): void {
 				}
 
 				if (error) {
-					// paplay failed, try aplay as fallback (aplay doesn't have volume control)
+					// paplay failed, try aplay as fallback
+					// Note: aplay doesn't support volume control, so sound plays at system volume
 					currentSession.process = execFile("aplay", [soundPath], () => {
 						if (currentSession?.id === sessionId) {
 							currentSession = null;

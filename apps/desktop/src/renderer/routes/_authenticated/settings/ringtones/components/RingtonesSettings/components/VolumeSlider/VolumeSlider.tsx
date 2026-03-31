@@ -1,6 +1,5 @@
 import { Label } from "@superset/ui/label";
 import { Slider } from "@superset/ui/slider";
-import { cn } from "@superset/ui/utils";
 import { useCallback, useEffect, useState } from "react";
 import { HiInformationCircle, HiSpeakerWave } from "react-icons/hi2";
 import { electronTrpc } from "renderer/lib/electron-trpc";
