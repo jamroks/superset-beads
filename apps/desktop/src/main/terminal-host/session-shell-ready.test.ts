@@ -266,6 +266,37 @@ describe("Session shell-ready: marker detection", () => {
 		sendData(proc, SHELL_READY_MARKER);
 		expect(getWrittenData(proc)).toEqual(["buffered\n"]);
 	});
+
+	it("detects marker when preceded by ESC that caused a partial match failure (#3061)", () => {
+		// Bug: When partial match fails on \x1b (ESC), which is also marker[0],
+		// the scanner consumed it as output instead of starting a new match.
+		// This caused the real marker immediately following to be completely missed,
+		// triggering the 15-second SHELL_READY_TIMEOUT and blocking all input.
+		const { session, proc } = createTestSession("/bin/zsh");
+		spawnAndReady(session, proc);
+
+		// Simulate: incomplete OSC (\x1b]) immediately followed by the real marker.
+		// The \x1b] matches marker positions 0-1, then the next \x1b (start of
+		// real marker) is a mismatch at position 2 (expected '7'). The scanner
+		// must retry \x1b against marker[0] instead of discarding it.
+		sendData(proc, `\x1b]\x1b]777;superset-shell-ready\x07`);
+
+		// Shell should be ready — writes should pass through
+		session.write("test\n");
+		expect(getWrittenData(proc)).toEqual(["test\n"]);
+	});
+
+	it("detects marker when double-ESC precedes it (#3061)", () => {
+		const { session, proc } = createTestSession("/bin/zsh");
+		spawnAndReady(session, proc);
+
+		// Double ESC: first ESC matches marker[0], second ESC is mismatch at
+		// marker[1] (expected ']'). Scanner must retry second ESC at marker[0].
+		sendData(proc, `\x1b\x1b]777;superset-shell-ready\x07`);
+
+		session.write("test\n");
+		expect(getWrittenData(proc)).toEqual(["test\n"]);
+	});
 });
 
 describe("Session shell-ready: kill/exit before readiness", () => {

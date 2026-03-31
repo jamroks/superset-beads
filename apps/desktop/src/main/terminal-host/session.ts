@@ -388,9 +388,19 @@ export class Session {
 							}
 						} else {
 							// Mismatch — flush held bytes as regular output
-							output += this.markerHeldBytes + data[i];
+							output += this.markerHeldBytes;
 							this.markerHeldBytes = "";
 							this.markerMatchPos = 0;
+							// Re-check current character against marker start
+							// to avoid missing overlapping matches (e.g. \x1b
+							// ending a failed partial match that also starts
+							// the real marker).
+							if (data[i] === SHELL_READY_MARKER[0]) {
+								this.markerHeldBytes = data[i];
+								this.markerMatchPos = 1;
+							} else {
+								output += data[i];
+							}
 						}
 					}
 					data = output;
