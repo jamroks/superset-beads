@@ -6,13 +6,20 @@ import {
 import type { StoreApi } from "zustand/vanilla";
 import type { WorkspaceStore } from "../../../../../core/store";
 import type { LayoutNode, Tab as TabType } from "../../../../../types";
-import type { PaneRegistry } from "../../../../types";
+import type {
+	PaneActionConfig,
+	PaneRegistry,
+	RendererContext,
+} from "../../../../types";
 import { Pane } from "./components/Pane";
 
 interface TabProps<TData> {
 	store: StoreApi<WorkspaceStore<TData>>;
 	tab: TabType<TData>;
 	registry: PaneRegistry<TData>;
+	paneActions?:
+		| PaneActionConfig<TData>[]
+		| ((context: RendererContext<TData>) => PaneActionConfig<TData>[]);
 }
 
 function weightsToPercentages(weights: number[]): number[] {
@@ -26,11 +33,15 @@ function LayoutNodeView<TData>({
 	tab,
 	node,
 	registry,
+	paneActions,
+	parentDirection = null,
 }: {
 	store: StoreApi<WorkspaceStore<TData>>;
 	tab: TabType<TData>;
 	node: LayoutNode;
 	registry: PaneRegistry<TData>;
+	paneActions?: TabProps<TData>["paneActions"];
+	parentDirection?: "horizontal" | "vertical" | null;
 }) {
 	if (node.type === "pane") {
 		const pane = tab.panes[node.paneId];
@@ -43,6 +54,8 @@ function LayoutNodeView<TData>({
 				pane={pane}
 				isActive={tab.activePaneId === pane.id}
 				registry={registry}
+				paneActions={paneActions}
+				parentDirection={parentDirection}
 			/>
 		);
 	}
@@ -71,6 +84,8 @@ function LayoutNodeView<TData>({
 								tab={tab}
 								node={child}
 								registry={registry}
+								paneActions={paneActions}
+								parentDirection={node.direction}
 							/>
 						</ResizablePanel>
 					</>
@@ -80,7 +95,12 @@ function LayoutNodeView<TData>({
 	);
 }
 
-export function Tab<TData>({ store, tab, registry }: TabProps<TData>) {
+export function Tab<TData>({
+	store,
+	tab,
+	registry,
+	paneActions,
+}: TabProps<TData>) {
 	if (!tab.layout) {
 		return (
 			<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -96,6 +116,7 @@ export function Tab<TData>({ store, tab, registry }: TabProps<TData>) {
 				tab={tab}
 				node={tab.layout}
 				registry={registry}
+				paneActions={paneActions}
 			/>
 		</div>
 	);

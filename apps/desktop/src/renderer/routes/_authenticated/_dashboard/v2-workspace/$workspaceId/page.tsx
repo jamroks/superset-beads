@@ -1,8 +1,10 @@
-import { Workspace } from "@superset/panes";
+import { Workspace, type PaneActionConfig } from "@superset/panes";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
+import { HiMiniXMark } from "react-icons/hi2";
+import { TbLayoutColumns, TbLayoutRows } from "react-icons/tb";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import {
@@ -10,6 +12,7 @@ import {
 	useCommandPalette,
 } from "renderer/screens/main/components/CommandPalette";
 import { PresetsBar } from "renderer/screens/main/components/WorkspaceView/ContentView/components/PresetsBar";
+import { HotkeyTooltipContent } from "renderer/components/HotkeyTooltipContent";
 import { useAppHotkey } from "renderer/stores/hotkeys";
 import { AddTabMenu } from "./components/AddTabMenu";
 import { WorkspaceEmptyState } from "./components/WorkspaceEmptyState";
@@ -173,6 +176,47 @@ function WorkspaceContent({
 		commandPalette.toggle();
 	}, [commandPalette]);
 
+	const defaultPaneActions = useMemo<PaneActionConfig<PaneViewerData>[]>(
+		() => [
+			{
+				key: "split",
+				icon: (ctx) =>
+					ctx.pane.parentDirection === "horizontal" ? (
+						<TbLayoutRows className="size-3.5" />
+					) : (
+						<TbLayoutColumns className="size-3.5" />
+					),
+				tooltip: (
+					<HotkeyTooltipContent label="Split pane" hotkeyId="SPLIT_AUTO" />
+				),
+				onClick: (ctx) => {
+					const position =
+						ctx.pane.parentDirection === "horizontal" ? "down" : "right";
+					ctx.actions.split(position, {
+						kind: "terminal",
+						data: {
+							sessionKey: `${workspaceId}:${crypto.randomUUID()}`,
+							cwd: `/workspace/${workspaceName}`,
+							launchMode: "workspace-shell",
+						} as TerminalPaneData,
+					});
+				},
+			},
+			{
+				key: "close",
+				icon: <HiMiniXMark className="size-3.5" />,
+				tooltip: (
+					<HotkeyTooltipContent
+						label="Close pane"
+						hotkeyId="CLOSE_TERMINAL"
+					/>
+				),
+				onClick: (ctx) => ctx.actions.close(),
+			},
+		],
+		[workspaceId, workspaceName],
+	);
+
 	useAppHotkey("NEW_GROUP", addTerminalTab, undefined, [addTerminalTab]);
 	useAppHotkey("NEW_CHAT", addChatTab, undefined, [addChatTab]);
 	useAppHotkey("NEW_BROWSER", addBrowserTab, undefined, [addBrowserTab]);
@@ -187,6 +231,7 @@ function WorkspaceContent({
 				{!isLoadingPresetsBar && showPresetsBar ? <PresetsBar /> : null}
 				<Workspace<PaneViewerData>
 					registry={paneRegistry}
+					paneActions={defaultPaneActions}
 					renderAddTabMenu={() => (
 						<AddTabMenu
 							onAddTerminal={addTerminalTab}

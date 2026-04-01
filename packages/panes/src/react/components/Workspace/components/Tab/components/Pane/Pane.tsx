@@ -2,11 +2,14 @@ import { useMemo } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import type { WorkspaceStore } from "../../../../../../../core/store";
 import type { Pane as PaneType, Tab } from "../../../../../../../types";
-import type { PaneRegistry, RendererContext } from "../../../../../../types";
+import type {
+	PaneActionConfig,
+	PaneRegistry,
+	RendererContext,
+} from "../../../../../../types";
 import { PaneHeaderActions } from "../../../../../PaneHeaderActions";
 import { PaneContent } from "./components/PaneContent";
 import { PaneHeader } from "./components/PaneHeader";
-import { getDefaultPaneActions } from "./constants";
 
 interface PaneComponentProps<TData> {
 	store: StoreApi<WorkspaceStore<TData>>;
@@ -14,6 +17,26 @@ interface PaneComponentProps<TData> {
 	pane: PaneType<TData>;
 	isActive: boolean;
 	registry: PaneRegistry<TData>;
+	parentDirection?: "horizontal" | "vertical" | null;
+	paneActions?:
+		| PaneActionConfig<TData>[]
+		| ((context: RendererContext<TData>) => PaneActionConfig<TData>[]);
+}
+
+function resolveActions<TData>(
+	config:
+		| PaneActionConfig<TData>[]
+		| ((
+				context: RendererContext<TData>,
+				defaults: PaneActionConfig<TData>[],
+		  ) => PaneActionConfig<TData>[])
+		| undefined,
+	context: RendererContext<TData>,
+	defaults: PaneActionConfig<TData>[],
+): PaneActionConfig<TData>[] {
+	if (!config) return defaults;
+	if (typeof config === "function") return config(context, defaults);
+	return config;
 }
 
 export function Pane<TData>({
@@ -22,16 +45,18 @@ export function Pane<TData>({
 	pane,
 	isActive,
 	registry,
+	parentDirection = null,
+	paneActions,
 }: PaneComponentProps<TData>) {
 	const definition = registry[pane.kind];
 
-	const resolvedActions =
-		definition?.paneActions ?? getDefaultPaneActions<TData>();
+	const tabs = store.getState().tabs;
+	const tabPosition = tabs.findIndex((t) => t.id === tab.id);
 
 	const context: RendererContext<TData> = useMemo(() => {
 		const ctx: RendererContext<TData> = {
-			pane,
-			tab,
+			pane: { ...pane, parentDirection },
+			tab: { ...tab, position: tabPosition },
 			isActive,
 			store,
 			actions: {
@@ -53,29 +78,45 @@ export function Pane<TData>({
 					}),
 				updateData: (data: TData) =>
 					store.getState().setPaneData({ paneId: pane.id, data }),
-				splitRight: (newPane) =>
+				split: (position, newPane) =>
 					store.getState().splitPane({
 						tabId: tab.id,
 						paneId: pane.id,
-						position: "right",
-						newPane,
-					}),
-				splitDown: (newPane) =>
-					store.getState().splitPane({
-						tabId: tab.id,
-						paneId: pane.id,
-						position: "bottom",
+						position: position === "down" ? "bottom" : "right",
 						newPane,
 					}),
 			},
-			components: {
-				PaneHeaderActions: () => (
-					<PaneHeaderActions actions={resolvedActions} context={ctx} />
-				),
-			},
+			components: { PaneHeaderActions: () => null },
 		};
+
+		// Resolve workspace-level actions (or empty if not provided)
+		const workspaceResolved =
+			typeof paneActions === "function"
+				? paneActions(ctx)
+				: (paneActions ?? []);
+
+		// Definition can override or modify workspace actions
+		const finalActions = resolveActions(
+			definition?.paneActions,
+			ctx,
+			workspaceResolved,
+		);
+
+		ctx.components.PaneHeaderActions = () => (
+			<PaneHeaderActions actions={finalActions} context={ctx} />
+		);
+
 		return ctx;
-	}, [pane, tab, isActive, store, resolvedActions]);
+	}, [
+		pane,
+		tab,
+		isActive,
+		store,
+		definition,
+		paneActions,
+		parentDirection,
+		tabPosition,
+	]);
 
 	const title = definition
 		? (pane.titleOverride ?? definition.getTitle?.(context) ?? pane.id)

@@ -7,9 +7,11 @@ export type {
 export { createWorkspaceStore } from "./core/store";
 export type {
 	PaneActionConfig,
+	PaneContext,
 	PaneDefinition,
 	PaneRegistry,
 	RendererContext,
+	TabContext,
 	WorkspaceProps,
 } from "./react";
 export { Workspace } from "./react";

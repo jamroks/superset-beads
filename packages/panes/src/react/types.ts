@@ -10,9 +10,17 @@ export interface PaneActionConfig<TData> {
 	onClick: (context: RendererContext<TData>) => void;
 }
 
+export interface PaneContext<TData> extends Pane<TData> {
+	parentDirection: "horizontal" | "vertical" | null;
+}
+
+export interface TabContext<TData> extends Tab<TData> {
+	position: number;
+}
+
 export interface RendererContext<TData> {
-	pane: Pane<TData>;
-	tab: Tab<TData>;
+	pane: PaneContext<TData>;
+	tab: TabContext<TData>;
 	isActive: boolean;
 	store: StoreApi<WorkspaceStore<TData>>;
 
@@ -22,8 +30,10 @@ export interface RendererContext<TData> {
 		setTitle: (title: string) => void;
 		pin: () => void;
 		updateData: (data: TData) => void;
-		splitRight: (newPane: CreatePaneInput<TData>) => void;
-		splitDown: (newPane: CreatePaneInput<TData>) => void;
+		split: (
+			position: "right" | "down",
+			newPane: CreatePaneInput<TData>,
+		) => void;
 	};
 
 	components: {
@@ -38,7 +48,12 @@ export interface PaneDefinition<TData> {
 	renderTitle?(context: RendererContext<TData>): ReactNode;
 	renderHeaderExtras?(context: RendererContext<TData>): ReactNode;
 	renderToolbar?(context: RendererContext<TData>): ReactNode;
-	paneActions?: PaneActionConfig<TData>[];
+	paneActions?:
+		| PaneActionConfig<TData>[]
+		| ((
+				context: RendererContext<TData>,
+				defaults: PaneActionConfig<TData>[],
+		  ) => PaneActionConfig<TData>[]);
 }
 
 export type PaneRegistry<TData> = Record<string, PaneDefinition<TData>>;
@@ -55,4 +70,7 @@ export interface WorkspaceProps<TData> {
 		tab: Tab<TData>,
 	) => boolean | Promise<boolean>;
 	onBeforeCloseTab?: (tab: Tab<TData>) => boolean | Promise<boolean>;
+	paneActions?:
+		| PaneActionConfig<TData>[]
+		| ((context: RendererContext<TData>) => PaneActionConfig<TData>[]);
 }

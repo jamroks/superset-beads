@@ -12,6 +12,7 @@ export function Workspace<TData>({
 	renderEmptyState,
 	renderAddTabMenu,
 	onBeforeCloseTab,
+	paneActions,
 }: WorkspaceProps<TData>) {
 	const tabs = useStore(store, (s) => s.tabs);
 	const activeTabId = useStore(store, (s) => s.activeTabId);
@@ -57,7 +58,12 @@ export function Workspace<TData>({
 				renderTabAccessory={renderTabAccessory}
 			/>
 			{activeTab ? (
-				<Tab store={store} tab={activeTab} registry={registry} />
+				<Tab
+					store={store}
+					tab={activeTab}
+					registry={registry}
+					paneActions={paneActions}
+				/>
 			) : (
 				<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
 					{renderEmptyState?.() ?? "No tabs open"}
