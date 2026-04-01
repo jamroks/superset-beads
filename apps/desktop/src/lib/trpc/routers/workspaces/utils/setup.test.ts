@@ -682,4 +682,49 @@ describe("run config", () => {
 		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
 		expect(config?.run).toEqual(["export DEBUG=1", "npm run dev"]);
 	});
+
+	test("config with object entries in run array does not crash on .trim()", () => {
+		// Reproduces https://github.com/nicepkg/superset/issues/3095
+		// When config.json contains objects like { name, command } in the run array,
+		// calling .trim() on those entries crashes the app.
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({
+				run: [
+					{ name: "My Script", command: "npm run dev" },
+					"bun run dev",
+					42,
+					"",
+				],
+			}),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		// loadSetupConfig passes the array through (it only checks Array.isArray),
+		// so consumers must filter non-string entries before calling .trim().
+		expect(config?.run).toBeDefined();
+		expect(Array.isArray(config?.run)).toBe(true);
+
+		// Verify that filtering to strings (as getResolvedRunCommands now does)
+		// produces the expected safe result and does not throw.
+		const safeCommands = (config?.run ?? []).filter(
+			(s): s is string => typeof s === "string" && s.trim().length > 0,
+		);
+		expect(safeCommands).toEqual(["bun run dev"]);
+	});
+
+	test("config with only object entries in run array filters to empty", () => {
+		writeFileSync(
+			join(MAIN_REPO, ".superset", "config.json"),
+			JSON.stringify({
+				run: [{ name: "My Script", command: "npm run dev" }],
+			}),
+		);
+
+		const config = loadSetupConfig({ mainRepoPath: MAIN_REPO });
+		const safeCommands = (config?.run ?? []).filter(
+			(s): s is string => typeof s === "string" && s.trim().length > 0,
+		);
+		expect(safeCommands).toEqual([]);
+	});
 });
