@@ -6,6 +6,7 @@ export type {
 } from "./core/store";
 export { createWorkspaceStore } from "./core/store";
 export type {
+	PaneActionConfig,
 	PaneDefinition,
 	PaneRegistry,
 	RendererContext,

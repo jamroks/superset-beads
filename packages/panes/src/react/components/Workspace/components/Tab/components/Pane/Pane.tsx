@@ -3,8 +3,10 @@ import type { StoreApi } from "zustand/vanilla";
 import type { WorkspaceStore } from "../../../../../../../core/store";
 import type { Pane as PaneType, Tab } from "../../../../../../../types";
 import type { PaneRegistry, RendererContext } from "../../../../../../types";
+import { PaneHeaderActions } from "../../../../../PaneHeaderActions";
 import { PaneContent } from "./components/PaneContent";
 import { PaneHeader } from "./components/PaneHeader";
+import { getDefaultPaneActions } from "./constants";
 
 interface PaneComponentProps<TData> {
 	store: StoreApi<WorkspaceStore<TData>>;
@@ -23,8 +25,11 @@ export function Pane<TData>({
 }: PaneComponentProps<TData>) {
 	const definition = registry[pane.kind];
 
-	const context: RendererContext<TData> = useMemo(
-		() => ({
+	const resolvedActions =
+		definition?.paneActions ?? getDefaultPaneActions<TData>();
+
+	const context: RendererContext<TData> = useMemo(() => {
+		const ctx: RendererContext<TData> = {
 			pane,
 			tab,
 			isActive,
@@ -64,16 +69,20 @@ export function Pane<TData>({
 					}),
 			},
 			components: {
-				DefaultContextMenuItems: () => null,
+				PaneHeaderActions: () => (
+					<PaneHeaderActions actions={resolvedActions} context={ctx} />
+				),
 			},
-		}),
-		[pane, tab, isActive, store],
-	);
+		};
+		return ctx;
+	}, [pane, tab, isActive, store, resolvedActions]);
 
 	const title = definition
 		? (pane.titleOverride ?? definition.getTitle?.(context) ?? pane.id)
 		: `Unknown: ${pane.kind}`;
 	const icon = definition?.getIcon?.(context);
+	const titleContent = definition?.renderTitle?.(context);
+	const headerExtras = definition?.renderHeaderExtras?.(context);
 	const toolbar = definition?.renderToolbar?.(context);
 
 	return (
@@ -86,7 +95,10 @@ export function Pane<TData>({
 				title={title}
 				icon={icon}
 				isActive={isActive}
+				titleContent={titleContent}
+				headerExtras={headerExtras}
 				toolbar={toolbar}
+				actionsContent={<context.components.PaneHeaderActions />}
 			/>
 			<PaneContent>
 				{definition ? (

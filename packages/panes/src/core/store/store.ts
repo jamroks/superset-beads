@@ -29,16 +29,16 @@ function buildPane<TData>(args: CreatePaneInput<TData>): Pane<TData> {
 function buildTab<TData>(args: {
 	id?: string;
 	titleOverride?: string;
-	panes: Pane<TData>[];
+	panes: [Pane<TData>, ...Pane<TData>[]];
 	activePaneId?: string;
 }): Tab<TData> {
 	const panesMap: Record<string, Pane<TData>> = {};
-	let layout: LayoutNode | null = null;
+	let layout: LayoutNode;
 
-	if (args.panes.length === 1 && args.panes[0]) {
+	if (args.panes.length === 1) {
 		panesMap[args.panes[0].id] = args.panes[0];
 		layout = { type: "pane", paneId: args.panes[0].id };
-	} else if (args.panes.length > 1) {
+	} else {
 		const children: LayoutNode[] = [];
 		const weights: number[] = [];
 		for (const pane of args.panes) {
@@ -59,7 +59,7 @@ function buildTab<TData>(args: {
 		id: args.id ?? generateId("tab"),
 		titleOverride: args.titleOverride,
 		createdAt: Date.now(),
-		activePaneId: args.activePaneId ?? args.panes[0]?.id ?? null,
+		activePaneId: args.activePaneId ?? args.panes[0].id,
 		layout,
 		panes: panesMap,
 	};
@@ -78,7 +78,7 @@ export type CreatePaneInput<TData> = {
 export type CreateTabInput<TData> = {
 	id?: string;
 	titleOverride?: string;
-	panes: CreatePaneInput<TData>[];
+	panes: [CreatePaneInput<TData>, ...CreatePaneInput<TData>[]];
 	activePaneId?: string;
 };
 
@@ -159,7 +159,11 @@ export function createWorkspaceStore<TData>(
 		activeTabId: options?.initialState?.activeTabId ?? null,
 
 		addTab: (args) => {
-			const tab = buildTab({ ...args, panes: args.panes.map(buildPane) });
+			const builtPanes = args.panes.map(buildPane) as [
+				Pane<TData>,
+				...Pane<TData>[],
+			];
+			const tab = buildTab({ ...args, panes: builtPanes });
 			set((s) => ({
 				tabs: [...s.tabs, tab],
 				activeTabId: s.activeTabId ?? tab.id,

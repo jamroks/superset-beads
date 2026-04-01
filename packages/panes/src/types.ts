@@ -25,7 +25,7 @@ export interface Tab<TData> {
 	titleOverride?: string;
 	createdAt: number;
 	activePaneId: string | null;
-	layout: LayoutNode | null;
+	layout: LayoutNode;
 	panes: Record<string, Pane<TData>>;
 }
 
