@@ -61,6 +61,7 @@ export function ReviewPanel({
 	const [resolvingThreadIds, setResolvingThreadIds] = useState<Set<string>>(
 		new Set(),
 	);
+	const [isResolvingAll, setIsResolvingAll] = useState(false);
 	const copiedActionResetTimeoutRef = useRef<ReturnType<
 		typeof setTimeout
 	> | null>(null);
@@ -115,13 +116,14 @@ export function ReviewPanel({
 	};
 
 	const handleToggleResolve = (comment: PullRequestComment) => {
-		if (!workspaceId || !comment.threadId) return;
+		const threadId = comment.threadId;
+		if (!workspaceId || !threadId) return;
 
-		setResolvingThreadIds((prev) => new Set(prev).add(comment.threadId!));
+		setResolvingThreadIds((prev) => new Set(prev).add(threadId));
 		resolveThreadMutation.mutate(
 			{
 				workspaceId,
-				threadId: comment.threadId,
+				threadId,
 				resolve: !comment.isResolved,
 			},
 			{
@@ -138,7 +140,7 @@ export function ReviewPanel({
 				onSettled: () => {
 					setResolvingThreadIds((prev) => {
 						const next = new Set(prev);
-						next.delete(comment.threadId!);
+						next.delete(threadId);
 						return next;
 					});
 				},
@@ -193,21 +195,19 @@ export function ReviewPanel({
 
 	const uniqueResolvableThreadIds = [
 		...new Set(
-			activeComments
-				.map((c) => c.threadId)
-				.filter((id): id is string => !!id),
+			activeComments.map((c) => c.threadId).filter((id): id is string => !!id),
 		),
 	];
-	const isResolvingAll = resolvingThreadIds.size > 0;
-
 	const handleResolveAll = async () => {
 		if (!workspaceId || uniqueResolvableThreadIds.length === 0) return;
 
-		setResolvingThreadIds(new Set(uniqueResolvableThreadIds));
+		const batchIds = uniqueResolvableThreadIds;
+		setIsResolvingAll(true);
+		setResolvingThreadIds((prev) => new Set([...prev, ...batchIds]));
 
 		try {
-			await Promise.all(
-				uniqueResolvableThreadIds.map((threadId) =>
+			const results = await Promise.allSettled(
+				batchIds.map((threadId) =>
 					resolveThreadMutation.mutateAsync({
 						workspaceId,
 						threadId,
@@ -215,12 +215,24 @@ export function ReviewPanel({
 					}),
 				),
 			);
-			onCommentsChange?.();
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			toast.error(`Failed to mark all as done: ${message}`);
+			const failed = results.filter((r) => r.status === "rejected");
+			if (results.some((r) => r.status === "fulfilled")) {
+				onCommentsChange?.();
+			}
+			if (failed.length > 0) {
+				toast.error(
+					`Failed to mark ${failed.length} thread${failed.length === 1 ? "" : "s"} as done`,
+				);
+			}
 		} finally {
-			setResolvingThreadIds(new Set());
+			setIsResolvingAll(false);
+			setResolvingThreadIds((prev) => {
+				const next = new Set(prev);
+				for (const id of batchIds) {
+					next.delete(id);
+				}
+				return next;
+			});
 		}
 	};
 
@@ -291,9 +303,7 @@ export function ReviewPanel({
 									handleToggleResolve(comment);
 								}}
 								disabled={resolvingThreadIds.has(comment.threadId)}
-								aria-label={
-									comment.isResolved ? "Undo done" : "Mark as done"
-								}
+								aria-label={comment.isResolved ? "Undo done" : "Mark as done"}
 							>
 								{resolvingThreadIds.has(comment.threadId) ? (
 									<LuLoaderCircle className="size-3 animate-spin" />

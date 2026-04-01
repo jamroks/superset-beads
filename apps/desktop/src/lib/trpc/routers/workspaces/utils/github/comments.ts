@@ -296,11 +296,19 @@ export async function resolveReviewThread({
 		? RESOLVE_REVIEW_THREAD_MUTATION
 		: UNRESOLVE_REVIEW_THREAD_MUTATION;
 
-	await execWithShellEnv(
+	const { stdout } = await execWithShellEnv(
 		"gh",
 		["api", "graphql", "-f", `query=${mutation}`, "-F", `threadId=${threadId}`],
 		{ cwd: worktreePath },
 	);
+
+	const json = JSON.parse(stdout.trim());
+	if (Array.isArray(json.errors) && json.errors.length > 0) {
+		const msg = json.errors
+			.map((e: { message?: string }) => e.message)
+			.join("; ");
+		throw new Error(msg || "GraphQL mutation failed");
+	}
 }
 
 async function fetchPaginatedCommentsEndpoint(
