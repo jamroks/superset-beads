@@ -18,6 +18,7 @@ import {
 	SETTING_ITEM_ID,
 	type SettingItemId,
 } from "../../../utils/settings-search";
+import { VolumeDropdown } from "./components/VolumeDropdown";
 
 function formatDuration(seconds: number): string {
 	return `${seconds}s`;
@@ -286,6 +287,9 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 						/>
 					</div>
 				)}
+
+				{/* Volume Dropdown */}
+				{showNotification && !isMuted && <VolumeDropdown />}
 
 				{/* Ringtone Section */}
 				{showNotification && !isMuted && (
