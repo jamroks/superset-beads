@@ -5,8 +5,10 @@ import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
+import { HotkeyTooltipContent } from "renderer/components/HotkeyTooltipContent";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { getGitHubStatusQueryPolicy } from "renderer/lib/githubQueryPolicy";
 import { useWorkspaceDeleteHandler } from "renderer/react-query/workspaces";
 import { navigateToWorkspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import { WorkspaceRunIndicator } from "renderer/screens/main/components/WorkspaceRunIndicator";
@@ -133,6 +135,10 @@ export function WorkspaceListItem({
 	const openInFinder = electronTrpc.external.openInFinder.useMutation({
 		onError: (error) => toast.error(`Failed to open: ${error.message}`),
 	});
+	const openFileInEditor = electronTrpc.external.openFileInEditor.useMutation({
+		onError: (error) =>
+			toast.error(`Failed to open in editor: ${error.message}`),
+	});
 	const setUnread = electronTrpc.workspaces.setUnread.useMutation({
 		onSuccess: () => utils.workspaces.getAllGrouped.invalidate(),
 		onError: (error) =>
@@ -141,14 +147,18 @@ export function WorkspaceListItem({
 
 	const { showDeleteDialog, setShowDeleteDialog, handleDeleteClick } =
 		useWorkspaceDeleteHandler();
+	const githubStatusQueryPolicy = getGitHubStatusQueryPolicy(
+		"workspace-list-item",
+		{
+			hasWorkspaceId: !!id,
+			isActive: hasHovered && type === "worktree",
+		},
+	);
 
 	const { data: githubStatus } =
 		electronTrpc.workspaces.getGitHubStatus.useQuery(
 			{ workspaceId: id },
-			{
-				enabled: hasHovered && type === "worktree",
-				staleTime: GITHUB_STATUS_STALE_TIME,
-			},
+			githubStatusQueryPolicy,
 		);
 
 	const { status: localChanges } = useGitChangesStatus({
@@ -227,6 +237,11 @@ export function WorkspaceListItem({
 
 	const handleOpenInFinder = () => {
 		if (worktreePath) openInFinder.mutate(worktreePath);
+	};
+
+	const handleOpenInEditor = () => {
+		if (worktreePath)
+			openFileInEditor.mutate({ path: worktreePath, projectId });
 	};
 
 	const { copyToClipboard } = useCopyToClipboard();
@@ -411,7 +426,10 @@ export function WorkspaceListItem({
 												</button>
 											</TooltipTrigger>
 											<TooltipContent side="top" sideOffset={4}>
-												Close workspace
+												<HotkeyTooltipContent
+													label="Close workspace"
+													hotkeyId={isActive ? "CLOSE_WORKSPACE" : undefined}
+												/>
 											</TooltipContent>
 										</Tooltip>
 									)}
@@ -454,9 +472,11 @@ export function WorkspaceListItem({
 				sections={sections}
 				onRename={rename.startRename}
 				onOpenInFinder={handleOpenInFinder}
+				onOpenInEditor={handleOpenInEditor}
 				onCopyPath={handleCopyPath}
 				onSetUnread={(unread) => setUnread.mutate({ id, isUnread: unread })}
 				onResetStatus={() => resetWorkspaceStatus(id)}
+				onDelete={handleDeleteClick}
 			>
 				{content}
 			</WorkspaceContextMenu>

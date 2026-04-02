@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { buildTerminalCommand } from "renderer/lib/terminal/launch-command";
 import { useTabsStore } from "renderer/stores/tabs/store";
-import { useTerminalCallbacksStore } from "renderer/stores/tabs/terminal-callbacks";
 import { useTerminalTheme } from "renderer/stores/theme";
 import { SessionKilledOverlay } from "./components";
 import {
@@ -57,12 +56,12 @@ export const Terminal = ({ paneId, tabId, workspaceId }: TerminalProps) => {
 			{ enabled: isWorkspaceRunPane },
 		);
 
+	const workspaceRunRestartCommand = isWorkspaceRunPane
+		? buildTerminalCommand(workspaceRunConfig?.commands)
+		: null;
 	const defaultRestartCommandRef = useRef<string | undefined>(undefined);
 	defaultRestartCommandRef.current =
-		pane?.workspaceRun?.command ??
-		(isWorkspaceRunPane
-			? (buildTerminalCommand(workspaceRunConfig?.commands) ?? undefined)
-			: undefined);
+		workspaceRunRestartCommand ?? pane?.workspaceRun?.command;
 
 	const utils = electronTrpc.useUtils();
 	const updateWorkspace = electronTrpc.workspaces.update.useMutation({
@@ -373,22 +372,6 @@ export const Terminal = ({ paneId, tabId, workspaceId }: TerminalProps) => {
 		defaultRestartCommandRef,
 	});
 
-	const registerRestartCallback = useTerminalCallbacksStore(
-		(s) => s.registerRestartCallback,
-	);
-	const unregisterRestartCallback = useTerminalCallbacksStore(
-		(s) => s.unregisterRestartCallback,
-	);
-	useEffect(() => {
-		registerRestartCallback(paneId, restartTerminal);
-		return () => unregisterRestartCallback(paneId);
-	}, [
-		paneId,
-		restartTerminal,
-		registerRestartCallback,
-		unregisterRestartCallback,
-	]);
-
 	useEffect(() => {
 		const xterm = xtermRef.current;
 		if (!xterm || !terminalTheme) return;
@@ -408,6 +391,12 @@ export const Terminal = ({ paneId, tabId, workspaceId }: TerminalProps) => {
 		const family =
 			fontSettings.terminalFontFamily || DEFAULT_TERMINAL_FONT_FAMILY;
 		const size = fontSettings.terminalFontSize ?? DEFAULT_TERMINAL_FONT_SIZE;
+		if (
+			xterm.options.fontFamily === family &&
+			xterm.options.fontSize === size
+		) {
+			return;
+		}
 		xterm.options.fontFamily = family;
 		xterm.options.fontSize = size;
 		fitAddonRef.current?.fit();
