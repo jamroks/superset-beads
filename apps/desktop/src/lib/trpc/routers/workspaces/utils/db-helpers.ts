@@ -101,12 +101,17 @@ export function hideProject(projectId: string): void {
 }
 
 /**
- * Check if a project has any remaining workspaces.
- * If not, hide it from the sidebar.
+ * Check if a project has any remaining workspaces or orphaned worktrees.
+ * If neither exist, hide it from the sidebar.
  *
  * Note: We check for ANY workspaces (including those being deleted) to avoid
  * prematurely hiding the project when multiple workspaces are being deleted
  * concurrently. The project should only be hidden when all deletions complete.
+ *
+ * We also check for orphaned worktrees (worktree records without a workspace).
+ * When a user "hides" a workspace, the worktree is intentionally kept on disk.
+ * The project should remain visible so the user can re-open those worktrees.
+ * See: https://github.com/nicepkg/superset/issues/3109
  */
 export function hideProjectIfNoWorkspaces(projectId: string): void {
 	const remainingWorkspaces = localDb
@@ -115,7 +120,14 @@ export function hideProjectIfNoWorkspaces(projectId: string): void {
 		.where(eq(workspaces.projectId, projectId))
 		.all();
 	if (remainingWorkspaces.length === 0) {
-		hideProject(projectId);
+		const remainingWorktrees = localDb
+			.select()
+			.from(worktrees)
+			.where(eq(worktrees.projectId, projectId))
+			.all();
+		if (remainingWorktrees.length === 0) {
+			hideProject(projectId);
+		}
 	}
 }
 
