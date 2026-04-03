@@ -1,52 +1,75 @@
+import type { RendererContext } from "@superset/panes";
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import {
 	type ConnectionState,
 	terminalRuntimeRegistry,
 } from "renderer/lib/terminal/terminal-runtime-registry";
-import { useWorkspaceWsUrl } from "../../../../../providers/WorkspaceTrpcProvider/WorkspaceTrpcProvider";
+import type {
+	PaneViewerData,
+	TerminalPaneData,
+} from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
+import { useWorkspaceWsUrl } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceTrpcProvider/WorkspaceTrpcProvider";
+import { useTerminalAppearance } from "./hooks/useTerminalAppearance";
 
 interface TerminalPaneProps {
-	paneId: string;
+	ctx: RendererContext<PaneViewerData>;
 	workspaceId: string;
 }
 
-function subscribeToState(paneId: string) {
+function subscribeToState(terminalId: string) {
 	return (callback: () => void) =>
-		terminalRuntimeRegistry.onStateChange(paneId, callback);
+		terminalRuntimeRegistry.onStateChange(terminalId, callback);
 }
 
-function getConnectionState(paneId: string): ConnectionState {
-	return terminalRuntimeRegistry.getConnectionState(paneId);
+function getConnectionState(terminalId: string): ConnectionState {
+	return terminalRuntimeRegistry.getConnectionState(terminalId);
 }
 
-export function TerminalPane({ paneId, workspaceId }: TerminalPaneProps) {
+export function TerminalPane({ ctx, workspaceId }: TerminalPaneProps) {
+	const { terminalId } = ctx.pane.data as TerminalPaneData;
 	const containerRef = useRef<HTMLDivElement | null>(null);
 
-	const websocketUrl = useWorkspaceWsUrl(`/terminal/${paneId}`, {
+	const appearance = useTerminalAppearance();
+	const appearanceRef = useRef(appearance);
+	appearanceRef.current = appearance;
+
+	const websocketUrl = useWorkspaceWsUrl(`/terminal/${terminalId}`, {
 		workspaceId,
 	});
 
-	const connectionState = useSyncExternalStore(subscribeToState(paneId), () =>
-		getConnectionState(paneId),
+	const connectionState = useSyncExternalStore(
+		subscribeToState(terminalId),
+		() => getConnectionState(terminalId),
 	);
 
+	// Appearance read from ref to avoid re-attach on theme/font change.
 	useEffect(() => {
 		const container = containerRef.current;
 		if (!container) return;
 
-		terminalRuntimeRegistry.attach(paneId, container, websocketUrl);
+		terminalRuntimeRegistry.attach(
+			terminalId,
+			container,
+			websocketUrl,
+			appearanceRef.current,
+		);
 
 		return () => {
-			terminalRuntimeRegistry.detach(paneId);
+			terminalRuntimeRegistry.detach(terminalId);
 		};
-	}, [paneId, websocketUrl]);
+	}, [terminalId, websocketUrl]);
+
+	useEffect(() => {
+		terminalRuntimeRegistry.updateAppearance(terminalId, appearance);
+	}, [terminalId, appearance]);
 
 	return (
-		<div className="flex h-full w-full flex-col">
+		<div className="flex h-full w-full flex-col p-2">
 			<div
 				ref={containerRef}
-				className="min-h-0 flex-1 overflow-hidden bg-[#14100f]"
+				className="min-h-0 flex-1 overflow-hidden"
+				style={{ backgroundColor: appearance.background }}
 			/>
 			{connectionState === "closed" && (
 				<div className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">

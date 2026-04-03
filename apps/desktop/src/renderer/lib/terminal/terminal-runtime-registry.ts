@@ -1,9 +1,11 @@
+import type { TerminalAppearance } from "./appearance";
 import {
 	attachToContainer,
 	createRuntime,
 	detachFromContainer,
 	disposeRuntime,
 	type TerminalRuntime,
+	updateRuntimeAppearance,
 } from "./terminal-runtime";
 import {
 	type ConnectionState,
@@ -16,28 +18,43 @@ import {
 } from "./terminal-ws-transport";
 
 interface RegistryEntry {
-	runtime: TerminalRuntime;
+	runtime: TerminalRuntime | null;
 	transport: TerminalTransport;
 }
 
 class TerminalRuntimeRegistryImpl {
 	private entries = new Map<string, RegistryEntry>();
 
-	private getOrCreate(paneId: string): RegistryEntry {
-		let entry = this.entries.get(paneId);
+	private getOrCreateEntry(terminalId: string): RegistryEntry {
+		let entry = this.entries.get(terminalId);
 		if (entry) return entry;
 
 		entry = {
-			runtime: createRuntime(paneId),
+			runtime: null,
 			transport: createTransport(),
 		};
 
-		this.entries.set(paneId, entry);
+		this.entries.set(terminalId, entry);
 		return entry;
 	}
 
-	attach(paneId: string, container: HTMLDivElement, wsUrl: string) {
-		const { runtime, transport } = this.getOrCreate(paneId);
+	attach(
+		terminalId: string,
+		container: HTMLDivElement,
+		wsUrl: string,
+		appearance: TerminalAppearance,
+	) {
+		const entry = this.getOrCreateEntry(terminalId);
+
+		if (!entry.runtime) {
+			entry.runtime = createRuntime(terminalId, appearance);
+		} else {
+			// Runtime already exists (reattach) — apply current appearance so
+			// the first fit uses up-to-date font metrics.
+			updateRuntimeAppearance(entry.runtime, appearance);
+		}
+
+		const { runtime, transport } = entry;
 
 		attachToContainer(runtime, container, () => {
 			sendResize(transport, runtime.terminal.cols, runtime.terminal.rows);
@@ -46,52 +63,60 @@ class TerminalRuntimeRegistryImpl {
 		connect(transport, runtime.terminal, wsUrl);
 	}
 
-	/**
-	 * Detach the terminal from its DOM container.
-	 *
-	 * This only removes the DOM attachment (wrapper, resize observer, focus).
-	 * The WebSocket and xterm data flow are intentionally kept alive so output
-	 * written while the pane is hidden is not lost.  Disposal of the transport
-	 * happens exclusively through {@link dispose} when the paneId is removed
-	 * from persisted pane state.
-	 */
-	detach(paneId: string) {
-		const entry = this.entries.get(paneId);
-		if (!entry) return;
+	detach(terminalId: string) {
+		const entry = this.entries.get(terminalId);
+		if (!entry?.runtime) return;
 
 		detachFromContainer(entry.runtime);
 	}
 
-	dispose(paneId: string) {
-		const entry = this.entries.get(paneId);
+	updateAppearance(terminalId: string, appearance: TerminalAppearance) {
+		const entry = this.entries.get(terminalId);
+		if (!entry?.runtime) return;
+
+		const prevCols = entry.runtime.terminal.cols;
+		const prevRows = entry.runtime.terminal.rows;
+
+		updateRuntimeAppearance(entry.runtime, appearance);
+
+		// Font changes can alter the grid size — forward to the PTY so the
+		// backend shell and TUIs see the correct cols/rows.
+		const { cols, rows } = entry.runtime.terminal;
+		if (cols !== prevCols || rows !== prevRows) {
+			sendResize(entry.transport, cols, rows);
+		}
+	}
+
+	dispose(terminalId: string) {
+		const entry = this.entries.get(terminalId);
 		if (!entry) return;
 
 		sendDispose(entry.transport);
 		disposeTransport(entry.transport);
-		disposeRuntime(entry.runtime);
+		if (entry.runtime) disposeRuntime(entry.runtime);
 
-		this.entries.delete(paneId);
+		this.entries.delete(terminalId);
 	}
 
-	getAllPaneIds(): Set<string> {
+	getAllTerminalIds(): Set<string> {
 		return new Set(this.entries.keys());
 	}
 
-	has(paneId: string): boolean {
-		return this.entries.has(paneId);
+	has(terminalId: string): boolean {
+		return this.entries.has(terminalId);
 	}
 
-	getConnectionState(paneId: string): ConnectionState {
+	getConnectionState(terminalId: string): ConnectionState {
 		return (
-			this.entries.get(paneId)?.transport.connectionState ?? "disconnected"
+			this.entries.get(terminalId)?.transport.connectionState ?? "disconnected"
 		);
 	}
 
-	onStateChange(paneId: string, listener: () => void): () => void {
-		const { transport } = this.getOrCreate(paneId);
-		transport.stateListeners.add(listener);
+	onStateChange(terminalId: string, listener: () => void): () => void {
+		const entry = this.getOrCreateEntry(terminalId);
+		entry.transport.stateListeners.add(listener);
 		return () => {
-			transport.stateListeners.delete(listener);
+			entry.transport.stateListeners.delete(listener);
 		};
 	}
 }
