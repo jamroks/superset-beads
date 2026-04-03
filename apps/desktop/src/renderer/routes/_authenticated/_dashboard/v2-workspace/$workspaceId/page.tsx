@@ -19,9 +19,9 @@ import { PresetsBar } from "renderer/screens/main/components/WorkspaceView/Conte
 import { useAppHotkey } from "renderer/stores/hotkeys";
 import { useStore } from "zustand";
 import { AddTabMenu } from "./components/AddTabMenu";
-import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { WorkspaceEmptyState } from "./components/WorkspaceEmptyState";
 import { WorkspaceNotFoundState } from "./components/WorkspaceNotFoundState";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
 import { usePaneRegistry } from "./hooks/usePaneRegistry";
 import { useV2WorkspacePaneLayout } from "./hooks/useV2WorkspacePaneLayout";
 import type {
