@@ -1,132 +1,125 @@
-# Persistence Architecture
+# HostService Durability Architecture
 
-This is the high-level model for durable local state in desktop v2.
+This doc is about one thing:
 
-## Core Idea
+- making `HostService` the durable owner of long-lived local services
 
-Persistence should not be owned by the renderer.
+It is not a general document about all persistence in the app.
 
-The renderer is a client. It mounts and unmounts views. It should attach to long-lived runtime state, not own it.
+## Goal
+
+`HostService` should be the process boundary for long-lived local services.
+
+Examples:
+
+- terminal
+- local jobs
+- indexing/search
+- other service-like runtimes that should outlive renderer churn
 
 ## Roles
 
 ### ElectronMain
 
-`ElectronMain` is the thin control plane.
+`ElectronMain` is the supervisor.
 
 It should own:
 
+- app lifecycle
 - windows
 - tray
 - menus
-- deep links
-- app lifecycle
 - service discovery
-- supervision of background services
+- health checks
+- restart/update orchestration
 
-It should not own long-lived terminal or job state.
+It should not own the runtime state of long-lived local services.
 
 ### HostService
 
-`HostService` is the long-lived background service.
+`HostService` is the durable local service host.
 
-It should own durable local subsystems such as:
+It should own:
 
-- terminal sessions
-- future local jobs
-- future indexing/search state
-- other long-running local runtimes
+- the lifecycle of long-lived local services
+- their runtime state
+- their control APIs
+- reconnect/reattach boundaries
+- later, any restore/checkpoint logic they need
 
-## Lifetimes
+### Renderer
 
-These lifetimes must stay separate:
+The renderer is a client.
 
-- view lifetime: React mount/unmount
-- model lifetime: object exists in persisted app state
-- runtime lifetime: live session or job exists in `HostService`
-- process lifetime: `HostService` itself is running
+It should:
 
-Most persistence bugs come from collapsing these into one boundary.
+- attach to services
+- detach from services
+- render their state
 
-## Lifecycle Model
+It should not define service lifetime.
 
-Views should usually do:
+## Core Rule
 
-- mount => attach
-- unmount => detach
+Renderer, route, tab, and workspace churn should not redefine the lifetime of a
+long-lived service.
 
-Actual destruction should happen only when the underlying model is really gone.
+If a service should survive that churn, it belongs behind `HostService`.
 
-For terminal, that means:
+## Lifecycle Boundaries
 
-- `paneId` is the view/layout identity
-- `terminalId` is the terminal session identity
-- panes should persist a `terminalId` reference
-- terminal session records should live in the `HostService` DB
-- switching tabs or workspaces should detach, not destroy
+Keep these separate:
 
-Current first cut:
+- view lifetime
+- model lifetime
+- service runtime lifetime
+- `HostService` process lifetime
 
-- keep ownership effectively 1:1
-- removing the last pane reference disposes the terminal session
-- the important change is that disposal happens by `terminalId` reference removal, not because `paneId` is the runtime key
-
-Later phases can relax that into separate session policies.
-
-## Restore Model
-
-There are two restore paths:
-
-- warm reattach: runtime is still alive, client reconnects
-- cold restore: runtime died, service restores from persisted state
-
-Warm reattach should be the default path.
+Most bugs come from collapsing them.
 
 ## Transport
 
-The transport can still be websocket.
+Transport can still be websocket.
 
 The important rule is:
 
-- transport identity must be runtime-scoped
-- not route-scoped or workspace-scoped
+- streaming and control belong to `HostService`
+- service identity must not depend on the current route or mounted tree
+- control operations should not depend on an already-open stream
 
-## Direction
+## Next Phase
 
-The target architecture is:
+### 1. Make HostService Durable
 
-- `ElectronMain` supervises
-- `HostService` owns long-lived runtime state
-- renderer views attach and detach
-- persistence and restore live behind `HostService`
+`ElectronMain` should discover and supervise a durable `HostService`.
 
-Terminal is the first concrete subsystem that should follow this model.
+That means:
 
-## Terminal Mapping
+- stable discovery
+- health checks
+- restart semantics
+- version / protocol handshake
 
-For terminal, the model should be:
+### 2. Move Long-Lived Services Behind HostService
 
-- `pane`
-  - persisted in workspace state
-  - stores `terminalId`
-- `terminal session`
-  - persisted in `HostService`
-  - keyed by `terminalId`
-  - should store lifecycle state first
-- renderer view
-  - attaches to the terminal session on mount
-  - detaches on unmount
+Each long-lived local service should live behind `HostService` with explicit
+operations like:
 
-This lets terminal sessions outlive any individual pane while keeping pane layout state separate from terminal runtime state.
+- create
+- attach
+- detach
+- dispose
 
-Creation metadata like `cwd`, `shell`, `launchMode`, and `command` should not
-automatically live on the main session row. If we need to preserve that later,
-it should be modeled separately as launch/create metadata, not mixed into basic
-session lifecycle state.
+### 3. Add Warm Reattach
 
-The first implementation slice does not need full session independence yet. It can still use:
+Before cold restore, a live `HostService` should support clean reattach after:
 
-- one pane reference -> one terminal session
-- last reference removed -> dispose session
+- workspace switch
+- tab switch
+- renderer restart
+- service reconnect
 
-as long as `terminalId` remains the runtime identity.
+### 4. Add Restore Later
+
+After warm reattach works, add whatever restore/checkpoint behavior each service
+needs.
