@@ -8,7 +8,7 @@ import {
 } from "@superset/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
 	VscAdd,
 	VscClippy,
@@ -82,8 +82,6 @@ export function FileItem({
 }: FileItemProps) {
 	const [showDiscardDialog, setShowDiscardDialog] = useState(false);
 	const { activeFileKey } = useScrollContext();
-	const clickTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
 	const fileName = getFileName(file.path);
 	const statusBadgeColor = getStatusColor(file.status);
 	const statusIndicator = getStatusIndicator(file.status);
@@ -118,41 +116,10 @@ export function FileItem({
 				return;
 			}
 
-			if (clickTimeoutRef.current) {
-				clearTimeout(clickTimeoutRef.current);
-				clickTimeoutRef.current = null;
-			}
-
-			clickTimeoutRef.current = setTimeout(() => {
-				clickTimeoutRef.current = null;
-				onClick();
-			}, 300);
+			onClick();
 		},
 		[onClick, openInEditor],
 	);
-
-	const handleDoubleClick = useCallback(
-		(e: React.MouseEvent) => {
-			e.preventDefault();
-			e.stopPropagation();
-
-			if (clickTimeoutRef.current) {
-				clearTimeout(clickTimeoutRef.current);
-				clickTimeoutRef.current = null;
-			}
-
-			openInEditor();
-		},
-		[openInEditor],
-	);
-
-	useEffect(() => {
-		return () => {
-			if (clickTimeoutRef.current) {
-				clearTimeout(clickTimeoutRef.current);
-			}
-		};
-	}, []);
 
 	const handleDiscardClick = () => {
 		setShowDiscardDialog(true);
@@ -225,7 +192,6 @@ export function FileItem({
 			<button
 				type="button"
 				onClick={handleClick}
-				onDoubleClick={handleDoubleClick}
 				className={cn(
 					"flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden",
 					hasIndent ? "py-0.5" : "py-1",

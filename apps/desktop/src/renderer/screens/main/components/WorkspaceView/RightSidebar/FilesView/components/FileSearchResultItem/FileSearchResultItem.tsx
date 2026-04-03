@@ -93,10 +93,6 @@ export function FileSearchResultItem({
 		}
 	};
 
-	const handleDoubleClick = () => {
-		onOpenInEditor(entry);
-	};
-
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === "Enter") {
 			e.preventDefault();
@@ -117,7 +113,6 @@ export function FileSearchResultItem({
 				"hover:bg-accent/50 transition-colors",
 			)}
 			onClick={handleClick}
-			onDoubleClick={handleDoubleClick}
 			onKeyDown={handleKeyDown}
 		>
 			<span className="flex items-center justify-center w-4 h-4 shrink-0" />
