@@ -5,11 +5,19 @@ import {
 	ContextMenuShortcut,
 } from "@superset/ui/context-menu";
 
-export function FolderContextMenu() {
+interface FolderContextMenuProps {
+	onNewFile: () => void;
+	onNewFolder: () => void;
+}
+
+export function FolderContextMenu({
+	onNewFile,
+	onNewFolder,
+}: FolderContextMenuProps) {
 	return (
 		<ContextMenuContent className="w-56">
-			<ContextMenuItem>New File...</ContextMenuItem>
-			<ContextMenuItem>New Folder...</ContextMenuItem>
+			<ContextMenuItem onClick={onNewFile}>New File...</ContextMenuItem>
+			<ContextMenuItem onClick={onNewFolder}>New Folder...</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuItem>
 				Reveal in Finder

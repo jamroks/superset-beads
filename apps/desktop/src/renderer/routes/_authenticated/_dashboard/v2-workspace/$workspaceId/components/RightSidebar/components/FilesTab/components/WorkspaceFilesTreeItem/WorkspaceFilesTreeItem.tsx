@@ -15,6 +15,8 @@ interface WorkspaceFilesTreeItemProps {
 	isHovered?: boolean;
 	onSelectFile: (absolutePath: string) => void;
 	onToggleDirectory: (absolutePath: string) => void;
+	onNewFile: (parentPath: string) => void;
+	onNewFolder: (parentPath: string) => void;
 }
 
 export function WorkspaceFilesTreeItem({
@@ -26,6 +28,8 @@ export function WorkspaceFilesTreeItem({
 	isHovered,
 	onSelectFile,
 	onToggleDirectory,
+	onNewFile,
+	onNewFolder,
 }: WorkspaceFilesTreeItemProps) {
 	const isFolder = node.kind === "directory";
 	const isSelected = selectedFilePath === node.absolutePath;
@@ -35,11 +39,16 @@ export function WorkspaceFilesTreeItem({
 			<ContextMenuTrigger asChild>
 				<button
 					data-filepath={node.absolutePath}
+					data-sticky-depth={isFolder ? depth : undefined}
 					aria-expanded={isFolder ? node.isExpanded : undefined}
 					className={cn(
 						"flex w-full cursor-pointer select-none items-center gap-1 px-1 text-left transition-colors",
 						isFolder ? "bg-background" : undefined,
-						isHovered && !isSelected ? "!bg-accent/50" : undefined,
+						isHovered && !isSelected
+							? isFolder
+								? "!bg-muted"
+								: "!bg-accent/50"
+							: undefined,
 						isSelected ? "!bg-accent" : undefined,
 					)}
 					onClick={() =>
@@ -80,7 +89,14 @@ export function WorkspaceFilesTreeItem({
 					<span className="min-w-0 flex-1 truncate text-xs">{node.name}</span>
 				</button>
 			</ContextMenuTrigger>
-			{isFolder ? <FolderContextMenu /> : <FileContextMenu />}
+			{isFolder ? (
+				<FolderContextMenu
+					onNewFile={() => onNewFile(node.absolutePath)}
+					onNewFolder={() => onNewFolder(node.absolutePath)}
+				/>
+			) : (
+				<FileContextMenu />
+			)}
 		</ContextMenu>
 	);
 }
