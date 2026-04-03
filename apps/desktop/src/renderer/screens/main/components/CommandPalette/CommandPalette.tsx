@@ -3,7 +3,7 @@ import { CommandPrimitive } from "@superset/ui/command";
 import { SearchIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LuChevronDown, LuChevronRight } from "react-icons/lu";
-import { useV2FileSearch } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/useV2FileSearch";
+import { useV2FileSearch } from "./hooks/useV2FileSearch";
 import { useFileSearch } from "renderer/screens/main/components/WorkspaceView/RightSidebar/FilesView/hooks/useFileSearch/useFileSearch";
 import { FileIcon } from "renderer/screens/main/components/WorkspaceView/RightSidebar/FilesView/utils";
 
