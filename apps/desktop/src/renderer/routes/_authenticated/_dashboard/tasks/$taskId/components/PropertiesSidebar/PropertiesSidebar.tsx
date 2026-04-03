@@ -14,7 +14,7 @@ export function PropertiesSidebar({ task }: PropertiesSidebarProps) {
 	const labels = task.labels ?? [];
 
 	return (
-		<div className="w-64 border-l border-border shrink-0">
+		<div className="w-64 border-l border-border shrink-0 overflow-hidden">
 			<ScrollArea className="h-full">
 				<div className="p-4 space-y-6">
 					<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
