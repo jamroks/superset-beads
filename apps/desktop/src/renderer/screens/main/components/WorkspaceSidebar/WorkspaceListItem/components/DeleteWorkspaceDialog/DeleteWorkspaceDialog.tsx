@@ -190,7 +190,7 @@ export function DeleteWorkspaceDialog({
 					}}
 				>
 					<AlertDialogHeader className="px-4 pt-4 pb-2">
-						<AlertDialogTitle className="font-medium">
+						<AlertDialogTitle className="font-medium break-words">
 							Close workspace "{workspaceName}"?
 						</AlertDialogTitle>
 						<AlertDialogDescription asChild>
@@ -236,7 +236,7 @@ export function DeleteWorkspaceDialog({
 				}}
 			>
 				<AlertDialogHeader className="px-4 pt-4 pb-2">
-					<AlertDialogTitle className="font-medium">
+					<AlertDialogTitle className="font-medium break-words">
 						Remove workspace "{workspaceName}"?
 					</AlertDialogTitle>
 					<AlertDialogDescription asChild>

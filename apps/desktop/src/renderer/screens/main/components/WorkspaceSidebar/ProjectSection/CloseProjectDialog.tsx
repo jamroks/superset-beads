@@ -28,7 +28,7 @@ export function CloseProjectDialog({
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
 			<EnterEnabledAlertDialogContent className="max-w-[340px] gap-0 p-0">
 				<AlertDialogHeader className="px-4 pt-4 pb-2">
-					<AlertDialogTitle className="font-medium">
+					<AlertDialogTitle className="font-medium break-words">
 						Close project "{projectName}"?
 					</AlertDialogTitle>
 					<AlertDialogDescription asChild>

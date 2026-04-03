@@ -56,7 +56,7 @@ export function DeleteWorktreeDialog({
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
 			<AlertDialogContent className="max-w-[340px] gap-0 p-0">
 				<AlertDialogHeader className="px-4 pt-4 pb-2">
-					<AlertDialogTitle className="font-medium">
+					<AlertDialogTitle className="font-medium break-words">
 						Delete worktree "{worktreeName}"?
 					</AlertDialogTitle>
 					<AlertDialogDescription asChild>

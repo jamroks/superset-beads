@@ -185,3 +185,61 @@ describe("DeleteWorkspaceDialog - keyboard focus trap when opened from ContextMe
 		expect(prevented).toBe(true);
 	});
 });
+
+/**
+ * Reproduces GitHub issue #3140:
+ * The "Remove workspace" dialog box does not expand properly when the
+ * workspace name is very long. The AlertDialogTitle text overflows the
+ * fixed-width (max-w-[340px]) container because it lacks word-breaking
+ * CSS classes.
+ *
+ * Fix: Add `break-words` class to every AlertDialogTitle that displays
+ * user-provided names inside a width-constrained dialog.
+ */
+describe("DeleteWorkspaceDialog - long workspace names overflow dialog (#3140)", () => {
+	const DIALOG_DIR = import.meta.dir;
+
+	test("AlertDialogTitle must have break-words class for worktree dialog", async () => {
+		const source = await Bun.file(
+			`${DIALOG_DIR}/DeleteWorkspaceDialog.tsx`,
+		).text();
+
+		// Both the branch (Close) and worktree (Remove) dialogs embed the
+		// workspace name in the title. Both must apply break-words so the
+		// text wraps inside the max-w-[340px] container instead of overflowing.
+		const titleMatches = source.match(
+			/<AlertDialogTitle[^>]*className="([^"]*)"[^>]*>/g,
+		);
+		expect(titleMatches).not.toBeNull();
+		expect(titleMatches?.length).toBeGreaterThanOrEqual(2);
+
+		for (const match of titleMatches!) {
+			expect(match).toContain("break-words");
+		}
+	});
+
+	test("all max-w-[340px] dialogs with dynamic titles must have break-words", async () => {
+		// Verify related dialogs also have the fix applied
+		const dialogFiles = [
+			`${DIALOG_DIR}/../../../../WorkspacesListView/WorkspaceRow/DeleteWorktreeDialog.tsx`,
+			`${DIALOG_DIR}/../../../../WorkspaceSidebar/ProjectSection/CloseProjectDialog.tsx`,
+			`${DIALOG_DIR}/../../../../../../../routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarDeleteDialog/DashboardSidebarDeleteDialog.tsx`,
+		];
+
+		for (const filePath of dialogFiles) {
+			const source = await Bun.file(filePath).text();
+
+			// Only check dialogs that have max-w-[340px] constraint
+			if (!source.includes("max-w-[340px]")) continue;
+
+			const titleMatches = source.match(
+				/<AlertDialogTitle[^>]*className="([^"]*)"[^>]*>/g,
+			);
+			if (!titleMatches) continue;
+
+			for (const match of titleMatches!) {
+				expect(match).toContain("break-words");
+			}
+		}
+	});
+});
