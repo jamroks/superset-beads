@@ -100,7 +100,7 @@ export async function fetchGitHubIssueFiles(
 
 ---
 
-${sanitizeText(truncatedBody)}`;
+${truncatedBody}`;
 
 				const base64 = btoa(
 					encodeURIComponent(markdown).replace(/%([0-9A-F]{2})/g, (_, p1) =>

@@ -44,7 +44,7 @@ describe("fetchGitHubIssueFiles", () => {
 		expect(result[0].data).toMatch(/^data:text\/markdown;base64,/);
 	});
 
-	test("sanitizes HTML entities in issue content", async () => {
+	test("sanitizes HTML entities in title but preserves body", async () => {
 		const queryFn = mock(() =>
 			Promise.resolve({
 				...mockIssueContent,
@@ -66,8 +66,11 @@ describe("fetchGitHubIssueFiles", () => {
 				.map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, "0")}`)
 				.join(""),
 		);
-		expect(decoded).not.toContain("<script>");
+		// Title should be sanitized
 		expect(decoded).toContain("&lt;script&gt;");
+		// Body should be preserved as-is (Markdown content)
+		expect(decoded).toContain("<b>html</b>");
+		expect(decoded).toContain("& entities");
 	});
 
 	test("truncates large bodies", async () => {

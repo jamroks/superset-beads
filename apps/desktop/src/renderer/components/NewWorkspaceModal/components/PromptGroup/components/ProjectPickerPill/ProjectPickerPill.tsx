@@ -14,15 +14,7 @@ import { HiCheck, HiChevronUpDown } from "react-icons/hi2";
 import { LuFolderGit, LuFolderOpen } from "react-icons/lu";
 import { ProjectThumbnail } from "renderer/screens/main/components/WorkspaceSidebar/ProjectSection/ProjectThumbnail";
 import { PILL_BUTTON_CLASS } from "../../constants";
-
-interface ProjectOption {
-	id: string;
-	name: string;
-	color: string;
-	githubOwner: string | null;
-	iconUrl: string | null;
-	hideImage: boolean | null;
-}
+import type { ProjectOption } from "../../types";
 
 interface ProjectPickerPillProps {
 	selectedProject: ProjectOption | undefined;

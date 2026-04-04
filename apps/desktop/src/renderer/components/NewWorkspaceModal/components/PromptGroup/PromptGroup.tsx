@@ -49,6 +49,7 @@ import { ProjectPickerPill } from "./components/ProjectPickerPill";
 import { PILL_BUTTON_CLASS } from "./constants";
 import { useBranchData } from "./hooks/useBranchData";
 import { useLinkedItems } from "./hooks/useLinkedItems";
+import type { ProjectOption } from "./types";
 import {
 	type ConvertedFile,
 	convertPromptInputFiles,
@@ -59,15 +60,6 @@ import type { OpenableWorktreeAction } from "./utils/resolveOpenableWorktrees";
 type WorkspaceCreateAgent = AgentDefinitionId | "none";
 
 const AGENT_STORAGE_KEY = "lastSelectedWorkspaceCreateAgent";
-
-interface ProjectOption {
-	id: string;
-	name: string;
-	color: string;
-	githubOwner: string | null;
-	iconUrl: string | null;
-	hideImage: boolean | null;
-}
 
 interface PromptGroupProps {
 	projectId: string | null;
@@ -420,6 +412,12 @@ function PromptGroupInner({
 				if (throwOnError) {
 					throw error;
 				}
+			} finally {
+				for (const file of detachedFiles) {
+					if (file.url?.startsWith("blob:")) {
+						URL.revokeObjectURL(file.url);
+					}
+				}
 			}
 		},
 		[
@@ -679,13 +677,7 @@ function PromptGroupInner({
 							repoName={project?.mainRepoPath.split("/").pop() ?? null}
 							anchorRef={plusMenuRef}
 						/>
-						<PromptInputSubmit
-							className="size-[22px] rounded-full border border-transparent bg-foreground/10 shadow-none p-[5px] hover:bg-foreground/20"
-							onClick={(e) => {
-								e.preventDefault();
-								void handleCreate();
-							}}
-						>
+						<PromptInputSubmit className="size-[22px] rounded-full border border-transparent bg-foreground/10 shadow-none p-[5px] hover:bg-foreground/20">
 							<ArrowUpIcon className="size-3.5 text-muted-foreground" />
 						</PromptInputSubmit>
 					</div>
