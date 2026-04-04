@@ -40,14 +40,14 @@ export function Workspace<TData>({
 				activeTabId={activeTabId}
 				onSelectTab={(tabId) => store.getState().setActiveTab(tabId)}
 				onCloseTab={closeTab}
-				onCloseOtherTabs={(tabId) => {
+				onCloseOtherTabs={async (tabId) => {
 					for (const tab of tabs) {
-						if (tab.id !== tabId) closeTab(tab.id);
+						if (tab.id !== tabId) await closeTab(tab.id);
 					}
 				}}
-				onCloseAllTabs={() => {
+				onCloseAllTabs={async () => {
 					for (const tab of tabs) {
-						closeTab(tab.id);
+						await closeTab(tab.id);
 					}
 				}}
 				onRenameTab={(tabId, title) =>
