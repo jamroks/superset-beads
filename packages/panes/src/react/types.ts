@@ -1,3 +1,4 @@
+import type { DragDropManager } from "dnd-core";
 import type { ComponentType, ReactNode } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import type { CreatePaneInput, WorkspaceStore } from "../core/store";
@@ -63,6 +64,8 @@ export type PaneRegistry<TData> = Record<string, PaneDefinition<TData>>;
 export interface WorkspaceProps<TData> {
 	store: StoreApi<WorkspaceStore<TData>>;
 	registry: PaneRegistry<TData>;
+	/** When provided, reuses an existing DragDropManager instead of creating a new HTML5Backend. */
+	dragDropManager?: DragDropManager;
 	className?: string;
 	renderTabAccessory?: (tab: Tab<TData>) => ReactNode;
 	renderEmptyState?: () => ReactNode;

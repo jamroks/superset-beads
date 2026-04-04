@@ -12,6 +12,7 @@ import { useCallback, useMemo, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
 import { TbLayoutColumns, TbLayoutRows } from "react-icons/tb";
 import { HotkeyTooltipContent } from "renderer/components/HotkeyTooltipContent";
+import { dragDropManager } from "renderer/lib/dnd";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { CommandPalette } from "renderer/screens/main/components/CommandPalette";
@@ -244,6 +245,7 @@ function WorkspaceContent({
 					>
 						{!isLoadingPresetsBar && showPresetsBar ? <PresetsBar /> : null}
 						<Workspace<PaneViewerData>
+							dragDropManager={dragDropManager}
 							registry={paneRegistry}
 							paneActions={defaultPaneActions}
 							renderAddTabMenu={() => (

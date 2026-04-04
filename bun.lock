@@ -765,6 +765,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@superset/ui": "workspace:*",
+        "dnd-core": "^16.0.1",
         "lucide-react": "^0.563.0",
         "react-dnd": "^16.0.1",
         "react-dnd-html5-backend": "^16.0.1",

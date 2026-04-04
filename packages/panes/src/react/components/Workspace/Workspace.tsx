@@ -9,6 +9,7 @@ import { TabBar } from "./components/TabBar";
 export function Workspace<TData>({
 	store,
 	registry,
+	dragDropManager,
 	className,
 	renderTabAccessory,
 	renderEmptyState,
@@ -30,8 +31,12 @@ export function Workspace<TData>({
 		store.getState().removeTab(tabId);
 	};
 
+	const dndProps = dragDropManager
+		? { manager: dragDropManager }
+		: { backend: HTML5Backend };
+
 	return (
-		<DndProvider backend={HTML5Backend}>
+		<DndProvider {...dndProps}>
 			<div
 				className={cn(
 					"flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-background text-foreground",
