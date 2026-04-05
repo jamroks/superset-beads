@@ -23,6 +23,9 @@ const KEY_DISPLAY: Record<string, string> = {
 	right: "→",
 	space: "␣",
 	slash: "/",
+	comma: ",",
+	bracketleft: "[",
+	bracketright: "]",
 };
 
 const MODIFIER_ORDER = ["meta", "ctrl", "alt", "shift"] as const;
