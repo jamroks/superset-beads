@@ -17,7 +17,7 @@ import {
 } from "renderer/components/OpenInExternalDropdown";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useThemeStore } from "renderer/stores";
-import { useAppHotkey, useHotkeyText } from "renderer/stores/hotkeys";
+import { useHotkey, useHotkeyDisplay } from "renderer/hotkeys";
 
 interface OpenInMenuButtonProps {
 	worktreePath: string;
@@ -54,10 +54,10 @@ export const OpenInMenuButton = memo(function OpenInMenuButton({
 		() => getAppOption(resolvedApp) ?? null,
 		[resolvedApp],
 	);
-	const openInShortcut = useHotkeyText("OPEN_IN_APP");
-	const copyPathShortcut = useHotkeyText("COPY_PATH");
-	const showOpenInShortcut = openInShortcut !== "Unassigned";
-	const showCopyPathShortcut = copyPathShortcut !== "Unassigned";
+	const openInDisplay = useHotkeyDisplay("OPEN_IN_APP");
+	const copyPathDisplay = useHotkeyDisplay("COPY_PATH");
+	const showOpenInShortcut = openInDisplay.text !== "Unassigned";
+	const showCopyPathShortcut = copyPathDisplay.text !== "Unassigned";
 	const isLoading = openInApp.isPending || copyPath.isPending;
 
 	const isDark = activeTheme?.type === "dark";
@@ -80,9 +80,7 @@ export const OpenInMenuButton = memo(function OpenInMenuButton({
 		copyPath.mutate(worktreePath);
 	}, [worktreePath, copyPath, openInApp.isPending]);
 
-	useAppHotkey("OPEN_IN_APP", handleOpenInEditor, undefined, [
-		handleOpenInEditor,
-	]);
+	useHotkey("OPEN_IN_APP", handleOpenInEditor);
 
 	return (
 		<div className="flex items-center no-drag">
@@ -170,12 +168,12 @@ export const OpenInMenuButton = memo(function OpenInMenuButton({
 								return null;
 							}
 							return (
-								<DropdownMenuShortcut>{openInShortcut}</DropdownMenuShortcut>
+								<DropdownMenuShortcut>{openInDisplay.text}</DropdownMenuShortcut>
 							);
 						}}
 						copyPathTrailing={
 							showCopyPathShortcut ? (
-								<DropdownMenuShortcut>{copyPathShortcut}</DropdownMenuShortcut>
+								<DropdownMenuShortcut>{copyPathDisplay.text}</DropdownMenuShortcut>
 							) : null
 						}
 						subContentClassName="w-40"
