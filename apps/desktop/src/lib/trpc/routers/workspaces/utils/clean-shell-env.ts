@@ -173,11 +173,7 @@ function spawnCleanShellEnv(): Promise<Record<string, string>> {
 
 		child.on("error", (error) => {
 			clearTimeout(timeout);
-			reject(
-				new Error(
-					`Shell process error for ${shell}: ${error.message}`,
-				),
-			);
+			reject(new Error(`Shell process error for ${shell}: ${error.message}`));
 		});
 
 		child.on("close", (code, signal) => {

@@ -12,13 +12,13 @@
 
 // Re-export sub-modules for consumers that import from "./env"
 export { stripTerminalRuntimeEnv } from "./env-strip";
+export type { ShellBootstrapParams, ShellLaunchParams } from "./shell-launch";
 export {
 	getShellBootstrapEnv,
 	getShellLaunchArgs,
 	getSupersetShellPaths,
 	resolveLaunchShell,
 } from "./shell-launch";
-export type { ShellBootstrapParams, ShellLaunchParams } from "./shell-launch";
 
 import { stripTerminalRuntimeEnv } from "./env-strip";
 import { getShellBootstrapEnv } from "./shell-launch";

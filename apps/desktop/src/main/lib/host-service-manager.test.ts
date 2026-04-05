@@ -53,10 +53,9 @@ describe("HostServiceManager", () => {
 
 		spyOn(childProcessModule, "spawn").mockImplementation(((..._args) =>
 			spawnMock(..._args)) as typeof childProcessModule.spawn);
-		spyOn(
-			shellEnvModule,
-			"getStrictShellEnvironment",
-		).mockImplementation(() => getStrictShellEnvironmentMock());
+		spyOn(shellEnvModule, "getStrictShellEnvironment").mockImplementation(() =>
+			getStrictShellEnvironmentMock(),
+		);
 
 		mock.module("electron", () => ({
 			app: {
@@ -107,7 +106,11 @@ describe("HostServiceManager", () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(getStrictShellEnvironmentMock.mock.calls).toHaveLength(1);
 
-		pendingEnv.resolve({ HOME: "/Users/test", PATH: "/usr/bin:/bin", SHELL: "/bin/zsh" });
+		pendingEnv.resolve({
+			HOME: "/Users/test",
+			PATH: "/usr/bin:/bin",
+			SHELL: "/bin/zsh",
+		});
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(spawnMock.mock.calls).toHaveLength(1);
@@ -121,6 +124,67 @@ describe("HostServiceManager", () => {
 		expect(await firstStart).toBe(4242);
 		expect(await secondStart).toBe(4242);
 		expect(manager.getPort("org-1")).toBe(4242);
+	});
+
+	it("spawns host-service from the strict shell snapshot plus explicit runtime keys", async () => {
+		const manager = new HostServiceManager();
+		manager.setAuthToken("auth-token");
+		manager.setCloudApiUrl("https://api.example.com");
+
+		const originalLeakedValues = {
+			SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
+			npm_package_name: process.env.npm_package_name,
+			ELECTRON_CLI_ARGS: process.env.ELECTRON_CLI_ARGS,
+		};
+		process.env.SENTRY_AUTH_TOKEN = "desktop-secret";
+		process.env.npm_package_name = "desktop-app";
+		process.env.ELECTRON_CLI_ARGS = "--inspect";
+
+		try {
+			const startPromise = manager.start("org-1");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			const spawnOptions = spawnMock.mock.calls[0]?.[2] as
+				| { env?: Record<string, string> }
+				| undefined;
+			const env = spawnOptions?.env;
+
+			expect(env).toBeDefined();
+			expect(env).toMatchObject({
+				HOME: "/Users/test",
+				PATH: "/usr/bin:/bin",
+				SHELL: "/bin/zsh",
+				AUTH_TOKEN: "auth-token",
+				CLOUD_API_URL: "https://api.example.com",
+				ELECTRON_RUN_AS_NODE: "1",
+				SUPERSET_AGENT_HOOK_VERSION: expect.any(String),
+				SUPERSET_HOME_DIR: expect.any(String),
+			});
+			expect(env?.HOST_SERVICE_SECRET).toEqual(expect.any(String));
+			expect(env?.HOST_DB_PATH).toEqual(expect.any(String));
+			expect(env?.SENTRY_AUTH_TOKEN).toBeUndefined();
+			expect(env?.npm_package_name).toBeUndefined();
+			expect(env?.ELECTRON_CLI_ARGS).toBeUndefined();
+
+			lastChild?.emit("message", { type: "ready", port: 4001 });
+			await startPromise;
+		} finally {
+			if (originalLeakedValues.SENTRY_AUTH_TOKEN !== undefined) {
+				process.env.SENTRY_AUTH_TOKEN = originalLeakedValues.SENTRY_AUTH_TOKEN;
+			} else {
+				delete process.env.SENTRY_AUTH_TOKEN;
+			}
+			if (originalLeakedValues.npm_package_name !== undefined) {
+				process.env.npm_package_name = originalLeakedValues.npm_package_name;
+			} else {
+				delete process.env.npm_package_name;
+			}
+			if (originalLeakedValues.ELECTRON_CLI_ARGS !== undefined) {
+				process.env.ELECTRON_CLI_ARGS = originalLeakedValues.ELECTRON_CLI_ARGS;
+			} else {
+				delete process.env.ELECTRON_CLI_ARGS;
+			}
+		}
 	});
 
 	it("stopAll() kills all instances", async () => {

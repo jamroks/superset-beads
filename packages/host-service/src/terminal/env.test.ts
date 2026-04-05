@@ -224,9 +224,9 @@ describe("getShellLaunchArgs", () => {
 	const supersetHomeDir = "/tmp/test-superset";
 
 	test("zsh launches as login shell", () => {
-		expect(
-			getShellLaunchArgs({ shell: "/bin/zsh", supersetHomeDir }),
-		).toEqual(["-l"]);
+		expect(getShellLaunchArgs({ shell: "/bin/zsh", supersetHomeDir })).toEqual([
+			"-l",
+		]);
 	});
 
 	test("bash falls back to login shell when rcfile missing", () => {
@@ -389,44 +389,40 @@ describe("buildV2TerminalEnv", () => {
 		agentHookVersion: "2",
 	};
 
-	test("v2 Superset metadata is present", () => {
+	test("injects the public terminal contract and retained v2 metadata", () => {
 		const env = buildV2TerminalEnv(baseParams);
-		expect(env.SUPERSET_TERMINAL_ID).toBe("term-1");
-		expect(env.SUPERSET_WORKSPACE_ID).toBe("ws-1");
-		expect(env.SUPERSET_WORKSPACE_PATH).toBe("/tmp/workspace");
-		expect(env.SUPERSET_AGENT_HOOK_PORT).toBe("51741");
-		expect(env.SUPERSET_AGENT_HOOK_VERSION).toBe("2");
-	});
-
-	test("TERM_PROGRAM=Superset and UTF-8 locale are present", () => {
-		const env = buildV2TerminalEnv(baseParams);
+		expect(env).toMatchObject({
+			TERM: "xterm-256color",
+			TERM_PROGRAM: "Superset",
+			TERM_PROGRAM_VERSION: "2.0.0",
+			COLORTERM: "truecolor",
+			PWD: "/tmp/workspace",
+			SUPERSET_TERMINAL_ID: "term-1",
+			SUPERSET_WORKSPACE_ID: "ws-1",
+			SUPERSET_WORKSPACE_PATH: "/tmp/workspace",
+			SUPERSET_ROOT_PATH: "/tmp/repo",
+			SUPERSET_ENV: "production",
+			SUPERSET_AGENT_HOOK_PORT: "51741",
+			SUPERSET_AGENT_HOOK_VERSION: "2",
+		});
 		expect(env.TERM_PROGRAM).toBe("Superset");
-		expect(env.TERM_PROGRAM_VERSION).toBe("2.0.0");
 		expect(env.LANG).toContain("UTF-8");
 	});
 
-	test("SUPERSET_ROOT_PATH is populated when project data is available", () => {
-		const env = buildV2TerminalEnv(baseParams);
-		expect(env.SUPERSET_ROOT_PATH).toBe("/tmp/repo");
-	});
-
-	test("missing root path degrades to empty string", () => {
+	test("allows empty root path and alternate Superset env without breaking the contract", () => {
 		const env = buildV2TerminalEnv({ ...baseParams, rootPath: "" });
 		expect(env.SUPERSET_ROOT_PATH).toBe("");
-	});
-
-	test("SUPERSET_ENV reflects the passed value", () => {
-		const env = buildV2TerminalEnv(baseParams);
-		expect(env.SUPERSET_ENV).toBe("production");
 
 		const devEnv = buildV2TerminalEnv({
 			...baseParams,
+			rootPath: "",
 			supersetEnv: "development",
 		});
 		expect(devEnv.SUPERSET_ENV).toBe("development");
+		expect(devEnv.SUPERSET_ROOT_PATH).toBe("");
 	});
 
-	test("does not include legacy v1 vars from base env", () => {
+	test("drops removed v1 metadata while preserving user shell vars", () => {
 		const env = buildV2TerminalEnv({
 			...baseParams,
 			baseEnv: {
@@ -435,39 +431,16 @@ describe("buildV2TerminalEnv", () => {
 				SUPERSET_TAB_ID: "tab-1",
 				SUPERSET_PORT: "51741",
 				SUPERSET_HOOK_VERSION: "2",
+				SUPERSET_WORKSPACE_NAME: "my-workspace",
+				NVM_DIR: "/Users/test/.nvm",
+				SSH_AUTH_SOCK: "/tmp/ssh.sock",
 			},
 		});
 		expect(env.SUPERSET_PANE_ID).toBeUndefined();
 		expect(env.SUPERSET_TAB_ID).toBeUndefined();
 		expect(env.SUPERSET_PORT).toBeUndefined();
 		expect(env.SUPERSET_HOOK_VERSION).toBeUndefined();
-	});
-
-	test("does not include SUPERSET_WORKSPACE_NAME", () => {
-		const env = buildV2TerminalEnv({
-			...baseParams,
-			baseEnv: {
-				...baseParams.baseEnv,
-				SUPERSET_WORKSPACE_NAME: "my-workspace",
-			},
-		});
 		expect(env.SUPERSET_WORKSPACE_NAME).toBeUndefined();
-	});
-
-	test("PWD reflects the launch cwd", () => {
-		const env = buildV2TerminalEnv(baseParams);
-		expect(env.PWD).toBe("/tmp/workspace");
-	});
-
-	test("preserves user shell vars from base env", () => {
-		const env = buildV2TerminalEnv({
-			...baseParams,
-			baseEnv: {
-				...baseParams.baseEnv,
-				NVM_DIR: "/Users/test/.nvm",
-				SSH_AUTH_SOCK: "/tmp/ssh.sock",
-			},
-		});
 		expect(env.NVM_DIR).toBe("/Users/test/.nvm");
 		expect(env.SSH_AUTH_SOCK).toBe("/tmp/ssh.sock");
 	});

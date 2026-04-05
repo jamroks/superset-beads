@@ -108,8 +108,10 @@ describe("shell env cache", () => {
 	});
 
 	test("clearShellEnvCache also clears the strict shell snapshot cache", async () => {
-		const [{ clearShellEnvCache, getStrictShellEnvironment }, defaultShellModule] =
-			await Promise.all([import("./shell-env"), import("default-shell")]);
+		const [
+			{ clearShellEnvCache, getStrictShellEnvironment },
+			defaultShellModule,
+		] = await Promise.all([import("./shell-env"), import("default-shell")]);
 		const resolvedDefaultShell =
 			typeof defaultShellModule.default === "string"
 				? defaultShellModule.default

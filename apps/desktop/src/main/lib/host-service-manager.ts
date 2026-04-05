@@ -8,7 +8,6 @@ import { env as sharedEnv } from "shared/env.shared";
 import { getStrictShellEnvironment } from "../../lib/trpc/routers/workspaces/utils/shell-env";
 import { SUPERSET_HOME_DIR } from "./app-environment";
 import { getDeviceName, getHashedDeviceId } from "./device-info";
-import { HOOK_PROTOCOL_VERSION } from "./terminal/env";
 import {
 	HOST_SERVICE_PROTOCOL_VERSION,
 	type HostServiceManifest,
@@ -18,6 +17,7 @@ import {
 	readManifest,
 	removeManifest,
 } from "./host-service-manifest";
+import { HOOK_PROTOCOL_VERSION } from "./terminal/env";
 
 export type HostServiceStatus =
 	| "starting"
@@ -126,9 +126,7 @@ export function checkCompatibility(instance: {
  * Throws if shell resolution fails — v2 terminal creation fails closed.
  * Desktop process.env is never a valid substitute.
  */
-async function resolveTerminalShellSnapshot(): Promise<
-	Record<string, string>
-> {
+async function resolveTerminalShellSnapshot(): Promise<Record<string, string>> {
 	return getStrictShellEnvironment();
 }
 
