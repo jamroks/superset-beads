@@ -17,6 +17,7 @@ import { Paywall } from "renderer/components/Paywall";
 import { useUpdateListener } from "renderer/components/UpdateToast";
 import { env } from "renderer/env.renderer";
 import { useOnlineStatus } from "renderer/hooks/useOnlineStatus";
+import { migrateHotkeyOverrides } from "renderer/hotkeys/migrate";
 import { authClient, getAuthToken } from "renderer/lib/auth-client";
 import { dragDropManager } from "renderer/lib/dnd";
 import { electronTrpc } from "renderer/lib/electron-trpc";
@@ -64,6 +65,11 @@ function AuthenticatedLayout() {
 
 	useAgentHookListener();
 	useUpdateListener();
+
+	// One-time migration from old hotkey storage to new localStorage-based store
+	useEffect(() => {
+		migrateHotkeyOverrides();
+	}, []);
 
 	// Update workspace-run pane state on terminal exit
 	electronTrpc.notifications.subscribe.useSubscription(undefined, {
