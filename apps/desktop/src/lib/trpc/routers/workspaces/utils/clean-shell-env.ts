@@ -22,6 +22,7 @@
  * - Detached spawn + stderr capture (from VS Code — resilience + debuggability)
  */
 import { type ChildProcess, spawn } from "node:child_process";
+import defaultShell from "default-shell";
 import { augmentPathForMacOS } from "./shell-env";
 
 const SHELL_ENV_TIMEOUT_MS = 8_000;
@@ -107,9 +108,31 @@ function parseEnvOutput(stdout: string): Record<string, string> {
  * receives a signal during resolution. Captures stderr for debugging shell
  * startup issues.
  */
+/**
+ * Resolve the shell binary to use for env resolution.
+ * Uses the same resolution chain as the v1 desktop terminal:
+ * default-shell package → SHELL env → /bin/sh fallback.
+ */
+function resolveShellForEnv(): string {
+	// default-shell uses OS-specific APIs (e.g., dscl on macOS) to find
+	// the user's configured shell even when SHELL is unset (GUI-launched apps)
+	const resolved =
+		typeof defaultShell === "string" && defaultShell.length > 0
+			? defaultShell
+			: typeof defaultShell === "object" &&
+					defaultShell !== null &&
+					"default" in defaultShell &&
+					typeof (defaultShell as { default?: string }).default === "string"
+				? (defaultShell as { default: string }).default
+				: null;
+
+	if (resolved) return resolved;
+	return process.env.SHELL || "/bin/sh";
+}
+
 function spawnCleanShellEnv(): Promise<Record<string, string>> {
 	return new Promise((resolve, reject) => {
-		const shell = process.env.SHELL || "/bin/sh";
+		const shell = resolveShellForEnv();
 		const env = buildMinimalEnv();
 
 		const command = `echo -n "${DELIMITER}"; command env; echo -n "${DELIMITER}"; exit`;

@@ -97,7 +97,10 @@ export async function getShellEnvironment(
 
 // Re-export the clean shell env resolver for v2 terminal construction.
 // The implementation lives in its own module to keep concerns separated.
-export { getStrictShellEnvironment } from "./clean-shell-env";
+export {
+	clearCleanShellEnvCache,
+	getStrictShellEnvironment,
+} from "./clean-shell-env";
 
 const COMMON_MACOS_PATHS = [
 	"/opt/homebrew/bin",
@@ -136,6 +139,7 @@ export function clearShellEnvCache(): void {
 	fallbackCacheTtlMs = FALLBACK_CACHE_TTL_MS;
 	pathFixAttempted = false;
 	pathFixSucceeded = false;
+	clearCleanShellEnvCache();
 }
 
 function copyStringEnv(

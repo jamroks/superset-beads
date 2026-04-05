@@ -30,9 +30,11 @@ class MockChildProcess extends EventEmitter {
 	unref = mock(() => {});
 }
 
-const getProcessEnvWithShellPathMock = mock(
-	async (env: Record<string, string>) => env,
-);
+const getStrictShellEnvironmentMock = mock(async () => ({
+	HOME: "/Users/test",
+	PATH: "/usr/bin:/bin",
+	SHELL: "/bin/zsh",
+}));
 let lastChild: MockChildProcess | null = null;
 const spawnMock = mock((..._args: unknown[]) => {
 	lastChild = new MockChildProcess();
@@ -51,12 +53,10 @@ describe("HostServiceManager", () => {
 
 		spyOn(childProcessModule, "spawn").mockImplementation(((..._args) =>
 			spawnMock(..._args)) as typeof childProcessModule.spawn);
-		spyOn(shellEnvModule, "getProcessEnvWithShellPath").mockImplementation(((
-			baseEnv: NodeJS.ProcessEnv = process.env,
-		) =>
-			getProcessEnvWithShellPathMock(
-				baseEnv as Record<string, string>,
-			)) as typeof shellEnvModule.getProcessEnvWithShellPath);
+		spyOn(
+			shellEnvModule,
+			"getStrictShellEnvironment",
+		).mockImplementation(() => getStrictShellEnvironmentMock());
 
 		mock.module("electron", () => ({
 			app: {
@@ -79,10 +79,12 @@ describe("HostServiceManager", () => {
 	});
 
 	beforeEach(() => {
-		getProcessEnvWithShellPathMock.mockReset();
-		getProcessEnvWithShellPathMock.mockImplementation(
-			async (env: Record<string, string>) => env,
-		);
+		getStrictShellEnvironmentMock.mockReset();
+		getStrictShellEnvironmentMock.mockImplementation(async () => ({
+			HOME: "/Users/test",
+			PATH: "/usr/bin:/bin",
+			SHELL: "/bin/zsh",
+		}));
 		spawnMock.mockReset();
 		spawnMock.mockImplementation(() => {
 			lastChild = new MockChildProcess();
@@ -91,10 +93,10 @@ describe("HostServiceManager", () => {
 		lastChild = null;
 	});
 
-	it("dedupes concurrent starts while shell PATH is resolving", async () => {
+	it("dedupes concurrent starts while shell snapshot is resolving", async () => {
 		const manager = new HostServiceManager();
 		const pendingEnv = createDeferred<Record<string, string>>();
-		getProcessEnvWithShellPathMock.mockImplementation(() => pendingEnv.promise);
+		getStrictShellEnvironmentMock.mockImplementation(() => pendingEnv.promise);
 
 		const firstStart = manager.start("org-1");
 		const secondStart = manager.start("org-1");
@@ -103,9 +105,9 @@ describe("HostServiceManager", () => {
 
 		// Flush microtasks so tryAdopt completes (no manifest → falls through to spawn)
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(getProcessEnvWithShellPathMock.mock.calls).toHaveLength(1);
+		expect(getStrictShellEnvironmentMock.mock.calls).toHaveLength(1);
 
-		pendingEnv.resolve({ PATH: "/usr/bin:/bin" });
+		pendingEnv.resolve({ HOME: "/Users/test", PATH: "/usr/bin:/bin", SHELL: "/bin/zsh" });
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(spawnMock.mock.calls).toHaveLength(1);
