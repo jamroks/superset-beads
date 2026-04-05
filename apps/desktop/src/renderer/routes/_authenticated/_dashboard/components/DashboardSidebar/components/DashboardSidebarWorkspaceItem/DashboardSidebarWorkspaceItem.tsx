@@ -1,3 +1,7 @@
+import {
+	selectWorkspaceStatus,
+	useV2PaneStatusStore,
+} from "renderer/stores/v2-pane-status";
 import type { DashboardSidebarWorkspace } from "../../types";
 import { DashboardSidebarDeleteDialog } from "../DashboardSidebarDeleteDialog";
 import { DashboardSidebarCollapsedWorkspaceButton } from "./components/DashboardSidebarCollapsedWorkspaceButton";
@@ -29,7 +33,10 @@ export function DashboardSidebarWorkspaceItem({
 		branch,
 		creationStatus,
 	} = workspace;
-	const mockData = getWorkspaceRowMocks(id);
+	const workspaceStatus = useV2PaneStatusStore((s) =>
+		selectWorkspaceStatus(s, id),
+	);
+	const mockData = { ...getWorkspaceRowMocks(id), workspaceStatus };
 	const {
 		cancelRename,
 		handleClick,

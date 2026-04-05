@@ -1,4 +1,4 @@
-import { type PaneActionConfig, Workspace } from "@superset/panes";
+import { type PaneActionConfig, type Tab, Workspace } from "@superset/panes";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -12,8 +12,11 @@ import {
 	CommandPalette,
 	useCommandPalette,
 } from "renderer/screens/main/components/CommandPalette";
+import { StatusIndicator } from "renderer/screens/main/components/StatusIndicator";
 import { PresetsBar } from "renderer/screens/main/components/WorkspaceView/ContentView/components/PresetsBar";
 import { useAppHotkey } from "renderer/stores/hotkeys";
+import { useV2PaneStatusStore } from "renderer/stores/v2-pane-status";
+import { getHighestPriorityStatus } from "shared/tabs-types";
 import { AddTabMenu } from "./components/AddTabMenu";
 import { WorkspaceEmptyState } from "./components/WorkspaceEmptyState";
 import { WorkspaceNotFoundState } from "./components/WorkspaceNotFoundState";
@@ -216,6 +219,11 @@ function WorkspaceContent({
 		[workspaceId, workspaceName],
 	);
 
+	const renderTabAccessory = useCallback(
+		(tab: Tab<PaneViewerData>) => <TabStatusAccessory tab={tab} />,
+		[],
+	);
+
 	useAppHotkey("NEW_GROUP", addTerminalTab, undefined, [addTerminalTab]);
 	useAppHotkey("NEW_CHAT", addChatTab, undefined, [addChatTab]);
 	useAppHotkey("NEW_BROWSER", addBrowserTab, undefined, [addBrowserTab]);
@@ -250,6 +258,7 @@ function WorkspaceContent({
 							onOpenTerminal={addTerminalTab}
 						/>
 					)}
+					renderTabAccessory={renderTabAccessory}
 					store={store}
 				/>
 			</div>
@@ -273,4 +282,16 @@ function WorkspaceContent({
 			/>
 		</>
 	);
+}
+
+function TabStatusAccessory({ tab }: { tab: Tab<PaneViewerData> }) {
+	const status = useV2PaneStatusStore((state) => {
+		const paneIds = Object.keys(tab.panes);
+		return getHighestPriorityStatus(
+			paneIds.map((id) => state.statuses[id]),
+		);
+	});
+
+	if (!status) return null;
+	return <StatusIndicator status={status} />;
 }
