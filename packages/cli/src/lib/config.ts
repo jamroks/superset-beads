@@ -8,6 +8,7 @@ export type SupersetConfig = {
 	};
 	activeOrg?: string;
 	apiUrl?: string;
+	clientIds?: Record<string, string>;
 };
 
 export type DeviceConfig = {

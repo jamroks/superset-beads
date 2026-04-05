@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authClient } from "@superset/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -11,27 +11,42 @@ export default function DeviceAuthPage() {
 
 	const [userCode, setUserCode] = useState(userCodeParam ?? "");
 	const [status, setStatus] = useState<
-		"idle" | "verifying" | "approving" | "approved" | "denied" | "error"
-	>(userCodeParam ? "verifying" : "idle");
+		"loading" | "idle" | "verifying" | "approving" | "approved" | "denied" | "error"
+	>("loading");
 	const [error, setError] = useState<string | null>(null);
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		const code = userCode.replace(/[-\s]/g, "").toUpperCase();
-		if (!code) return;
+	// Check if user is authenticated
+	useEffect(() => {
+		authClient.getSession().then(({ data: session }) => {
+			if (!session) {
+				const returnUrl = `/device${userCodeParam ? `?user_code=${userCodeParam}` : ""}`;
+				router.push(`/sign-in?redirect=${encodeURIComponent(returnUrl)}`);
+				return;
+			}
+			setStatus(userCodeParam ? "verifying" : "idle");
+
+			// If we have a code from the URL, auto-verify it
+			if (userCodeParam) {
+				verifyCode(userCodeParam);
+			}
+		});
+	}, []);
+
+	const verifyCode = async (code: string) => {
+		const cleaned = code.replace(/[-\s]/g, "").toUpperCase();
+		if (!cleaned) return;
 
 		setStatus("verifying");
 		setError(null);
 
 		try {
-			// Verify the code is valid
 			const res = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device/verify?user_code=${encodeURIComponent(code)}`,
+				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device?user_code=${encodeURIComponent(cleaned)}`,
 			);
 
 			if (!res.ok) {
-				const data = await res.json();
-				setError(data.message ?? "Invalid or expired code");
+				const data = await res.json().catch(() => ({}));
+				setError((data as any).message ?? "Invalid or expired code");
 				setStatus("error");
 				return;
 			}
@@ -41,6 +56,11 @@ export default function DeviceAuthPage() {
 			setError("Failed to verify code");
 			setStatus("error");
 		}
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		await verifyCode(userCode);
 	};
 
 	const handleApprove = async () => {
@@ -57,8 +77,8 @@ export default function DeviceAuthPage() {
 			);
 
 			if (!res.ok) {
-				const data = await res.json();
-				setError(data.message ?? "Failed to approve");
+				const data = await res.json().catch(() => ({}));
+				setError((data as any).message ?? "Failed to approve");
 				setStatus("error");
 				return;
 			}
@@ -87,6 +107,14 @@ export default function DeviceAuthPage() {
 			setStatus("denied");
 		}
 	};
+
+	if (status === "loading") {
+		return (
+			<div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+				<p className="text-muted-foreground">Loading...</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
