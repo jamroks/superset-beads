@@ -45,7 +45,9 @@ export function PaneContextMenuItems({
 	const splitRightShortcut = useHotkeyDisplay("SPLIT_RIGHT").text;
 	const splitWithChatShortcut = useHotkeyDisplay("SPLIT_WITH_CHAT").text;
 	const splitWithBrowserShortcut = useHotkeyDisplay("SPLIT_WITH_BROWSER").text;
-	const equalizePaneSplitsShortcut = useHotkeyDisplay("EQUALIZE_PANE_SPLITS").text;
+	const equalizePaneSplitsShortcut = useHotkeyDisplay(
+		"EQUALIZE_PANE_SPLITS",
+	).text;
 	const targetTabs = actions.availableTabs.filter(
 		(tab) => tab.id !== actions.currentTabId,
 	);

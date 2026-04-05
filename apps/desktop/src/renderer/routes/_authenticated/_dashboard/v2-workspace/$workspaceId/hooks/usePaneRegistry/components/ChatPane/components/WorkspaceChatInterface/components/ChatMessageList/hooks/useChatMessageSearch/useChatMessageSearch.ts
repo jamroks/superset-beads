@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { useEffect } from "react";
-import { useTextSearch } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/TabView/hooks";
 import { useHotkey } from "renderer/hotkeys";
+import { useTextSearch } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/TabView/hooks";
 
 interface UseChatMessageSearchOptions {
 	containerRef: RefObject<HTMLDivElement | null>;
@@ -46,7 +46,6 @@ export function useChatMessageSearch({
 			textSearch.setIsSearchOpen(true);
 		},
 		{ enabled: isFocused, preventDefault: true },
-		[textSearch.closeSearch, textSearch.isSearchOpen],
 	);
 
 	return {

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { formatHotkeyDisplay } from "../../display";
-import type { HotkeyDisplay } from "../../types";
 import { PLATFORM } from "../../registry";
+import type { HotkeyDisplay } from "../../types";
 import { useBinding } from "../useBinding";
 
 export function useHotkeyDisplay(id: string): HotkeyDisplay {

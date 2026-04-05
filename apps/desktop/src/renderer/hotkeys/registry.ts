@@ -539,6 +539,18 @@ export const HOTKEYS_REGISTRY = {
 		category: "Window",
 		description: "Copy the workspace path to the clipboard",
 	},
+
+	// Help
+	OPEN_SETTINGS: {
+		key: { mac: "meta+,", windows: "ctrl+,", linux: "ctrl+," },
+		label: "Open Settings",
+		category: "Help",
+	},
+	SHOW_HOTKEYS: {
+		key: { mac: "meta+/", windows: "ctrl+shift+/", linux: "ctrl+shift+/" },
+		label: "Show Keyboard Shortcuts",
+		category: "Help",
+	},
 } as const satisfies Record<string, HotkeyRegistryDefinition>;
 
 export type HotkeyId = keyof typeof HOTKEYS_REGISTRY;

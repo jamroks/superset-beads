@@ -1,8 +1,8 @@
-import { useRecordHotkeys as useRecordHotkeysLib } from "react-hotkeys-hook";
 import { useEffect } from "react";
+import { useRecordHotkeys as useRecordHotkeysLib } from "react-hotkeys-hook";
 import { HOTKEYS, type HotkeyId, PLATFORM } from "../../registry";
-import type { Platform } from "../../types";
 import { useHotkeyOverridesStore } from "../../stores/hotkeyOverridesStore";
+import type { Platform } from "../../types";
 
 // ---------------------------------------------------------------------------
 // Helpers (co-located — only used by this hook)
@@ -31,7 +31,11 @@ function keysSetToString(keys: Set<string>): string | null {
 
 /** Canonicalize a key string: consistent modifier order, lowercase */
 function canonicalize(keys: string): string | null {
-	const parts = keys.toLowerCase().split("+").map((p) => p.trim()).filter(Boolean);
+	const parts = keys
+		.toLowerCase()
+		.split("+")
+		.map((p) => p.trim())
+		.filter(Boolean);
 	const modifiers: string[] = [];
 	let primary: string | null = null;
 
@@ -58,7 +62,12 @@ function isValidAppHotkey(keys: string): boolean {
 }
 
 const TERMINAL_RESERVED = new Set([
-	"ctrl+c", "ctrl+d", "ctrl+z", "ctrl+s", "ctrl+q", "ctrl+\\",
+	"ctrl+c",
+	"ctrl+d",
+	"ctrl+z",
+	"ctrl+s",
+	"ctrl+q",
+	"ctrl+\\",
 ]);
 
 const OS_RESERVED: Record<Platform, string[]> = {
@@ -102,7 +111,10 @@ interface UseRecordHotkeysOptions {
 	onSave?: (id: HotkeyId, keys: string) => void;
 	onUnassign?: (id: HotkeyId) => void;
 	onConflict?: (targetId: HotkeyId, keys: string, conflictId: HotkeyId) => void;
-	onReserved?: (keys: string, info: { reason: string; severity: "error" | "warning" }) => void;
+	onReserved?: (
+		keys: string,
+		info: { reason: string; severity: "error" | "warning" },
+	) => void;
 }
 
 export function useRecordHotkeys(

@@ -1,6 +1,6 @@
 import { DropdownMenuShortcut } from "@superset/ui/dropdown-menu";
-import { useHotkeyDisplay } from "renderer/hotkeys";
 import type { HotkeyId } from "renderer/hotkeys";
+import { useHotkeyDisplay } from "renderer/hotkeys";
 
 interface HotkeyMenuShortcutProps {
 	hotkeyId: HotkeyId;

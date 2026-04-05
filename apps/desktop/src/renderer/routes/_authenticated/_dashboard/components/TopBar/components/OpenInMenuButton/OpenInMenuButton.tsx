@@ -167,12 +167,16 @@ export const OpenInMenuButton = memo(function OpenInMenuButton({
 								return null;
 							}
 							return (
-								<DropdownMenuShortcut>{openInDisplay.text}</DropdownMenuShortcut>
+								<DropdownMenuShortcut>
+									{openInDisplay.text}
+								</DropdownMenuShortcut>
 							);
 						}}
 						copyPathTrailing={
 							showCopyPathShortcut ? (
-								<DropdownMenuShortcut>{copyPathDisplay.text}</DropdownMenuShortcut>
+								<DropdownMenuShortcut>
+									{copyPathDisplay.text}
+								</DropdownMenuShortcut>
 							) : null
 						}
 						subContentClassName="w-40"

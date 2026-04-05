@@ -125,7 +125,7 @@ function KeyboardShortcutsPage() {
 	const resetAll = useHotkeyOverridesStore((s) => s.resetAll);
 	const setOverride = useHotkeyOverridesStore((s) => s.setOverride);
 
-	const { isRecording } = useRecordHotkeys(recordingId, {
+	useRecordHotkeys(recordingId, {
 		onSave: () => setRecordingId(null),
 		onUnassign: () => setRecordingId(null),
 		onConflict: (targetId, keys, conflictId) => {

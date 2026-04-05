@@ -12,8 +12,8 @@ import { useEffect, useRef } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { HiMiniCommandLine } from "react-icons/hi2";
 import { getPresetIcon } from "renderer/assets/app-icons/preset-icons";
-import { HotkeyLabel } from "renderer/hotkeys";
 import type { HotkeyId } from "renderer/hotkeys";
+import { HotkeyLabel } from "renderer/hotkeys";
 
 const PRESET_BAR_ITEM_TYPE = "PRESET_BAR_ITEM";
 

@@ -8,8 +8,8 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import type { ITheme } from "@xterm/xterm";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { debounce } from "lodash";
-import { electronTrpcClient as trpcClient } from "renderer/lib/trpc-client";
 import { getBinding, isTerminalReservedEvent } from "renderer/hotkeys";
+import { electronTrpcClient as trpcClient } from "renderer/lib/trpc-client";
 import { toXtermTheme } from "renderer/stores/theme/utils";
 import {
 	builtInThemes,
@@ -675,7 +675,8 @@ export function setupKeyboardHandler(
 		}
 
 		// Any other ctrl/meta combo → let it bubble to document for react-hotkeys-hook
-		if (event.type === "keydown" && (event.metaKey || event.ctrlKey)) return false;
+		if (event.type === "keydown" && (event.metaKey || event.ctrlKey))
+			return false;
 
 		return true;
 	};

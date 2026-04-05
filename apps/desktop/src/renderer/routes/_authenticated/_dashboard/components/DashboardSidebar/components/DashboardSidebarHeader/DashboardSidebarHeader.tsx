@@ -2,11 +2,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { LuLayers, LuPlus } from "react-icons/lu";
+import { useHotkeyDisplay } from "renderer/hotkeys";
 import {
 	STROKE_WIDTH,
 	STROKE_WIDTH_THICK,
 } from "renderer/screens/main/components/WorkspaceSidebar/constants";
-import { useHotkeyDisplay } from "renderer/hotkeys";
 import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
 
 interface DashboardSidebarHeaderProps {

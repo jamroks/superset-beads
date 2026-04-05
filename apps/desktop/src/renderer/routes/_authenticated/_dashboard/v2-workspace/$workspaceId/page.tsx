@@ -11,8 +11,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
 import { TbLayoutColumns, TbLayoutRows } from "react-icons/tb";
-import { electronTrpc } from "renderer/lib/electron-trpc";
 import { HotkeyLabel, useHotkey } from "renderer/hotkeys";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { CommandPalette } from "renderer/screens/main/components/CommandPalette";
 import { PresetsBar } from "renderer/screens/main/components/WorkspaceView/ContentView/components/PresetsBar";
@@ -192,9 +192,7 @@ function WorkspaceContent({
 					) : (
 						<TbLayoutColumns className="size-3.5" />
 					),
-				tooltip: (
-					<HotkeyLabel label="Split pane" id="SPLIT_AUTO" />
-				),
+				tooltip: <HotkeyLabel label="Split pane" id="SPLIT_AUTO" />,
 				onClick: (ctx) => {
 					const position =
 						ctx.pane.parentDirection === "horizontal" ? "down" : "right";
@@ -209,9 +207,7 @@ function WorkspaceContent({
 			{
 				key: "close",
 				icon: <HiMiniXMark className="size-3.5" />,
-				tooltip: (
-					<HotkeyLabel label="Close pane" id="CLOSE_TERMINAL" />
-				),
+				tooltip: <HotkeyLabel label="Close pane" id="CLOSE_TERMINAL" />,
 				onClick: (ctx) => ctx.actions.close(),
 			},
 		],

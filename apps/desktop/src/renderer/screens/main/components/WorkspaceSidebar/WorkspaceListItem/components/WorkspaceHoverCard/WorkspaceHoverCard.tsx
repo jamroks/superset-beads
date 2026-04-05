@@ -8,9 +8,9 @@ import {
 	LuLoaderCircle,
 	LuTriangleAlert,
 } from "react-icons/lu";
+import { useHotkeyDisplay } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { usePRStatus } from "renderer/screens/main/hooks";
-import { useHotkeyDisplay } from "renderer/hotkeys";
 import { STROKE_WIDTH } from "../../../constants";
 import { ChecksList } from "./components/ChecksList";
 import { ChecksSummary } from "./components/ChecksSummary";

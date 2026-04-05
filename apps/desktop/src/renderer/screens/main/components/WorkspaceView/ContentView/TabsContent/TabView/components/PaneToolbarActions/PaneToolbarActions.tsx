@@ -1,8 +1,8 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { HiMiniXMark } from "react-icons/hi2";
 import { TbLayoutColumns, TbLayoutRows } from "react-icons/tb";
-import { HotkeyLabel } from "renderer/hotkeys";
 import type { HotkeyId } from "renderer/hotkeys";
+import { HotkeyLabel } from "renderer/hotkeys";
 import type { SplitOrientation } from "../../hooks";
 
 interface PaneToolbarActionsProps {
