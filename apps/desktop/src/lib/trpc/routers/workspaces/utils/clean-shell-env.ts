@@ -1,25 +1,14 @@
 /**
  * Clean shell environment resolution for v2 terminals.
  *
- * Spawns the user's login shell with a minimal parent env so that
- * desktop runtime state (Vite .env secrets, Electron vars, build-tool
- * config) never contaminates the shell snapshot. The shell's profile
- * scripts populate the env with the user's actual vars.
+ * Spawns the user's login shell with a minimal parent env so desktop
+ * runtime state (Vite .env secrets, Electron vars) never contaminates
+ * the snapshot. Makes dev and production behave identically.
  *
- * This makes dev and production behave identically — the snapshot only
- * contains what the user's shell profile produces.
- *
- * Design reference:
- * - VS Code (src/vs/platform/shell/node/shellEnv.ts): spawns a login
- *   shell with detached:true, captures JSON env via Node inside the
- *   shell, cleans up ELECTRON_* vars from the result.
- * - shell-env (npm): spawns a login shell with `command env` between
- *   delimiters, parses line-based output.
- *
- * We combine the best of both:
- * - Clean parent env (neither VS Code nor shell-env do this)
- * - Delimiter-wrapped `command env` (from shell-env — no Node dependency)
- * - Detached spawn + stderr capture (from VS Code — resilience + debuggability)
+ * Combines patterns from:
+ * - VS Code: detached spawn, stderr capture for debuggability
+ * - shell-env (npm): delimiter-wrapped `command env`, no Node dependency
+ * - Neither does clean parent env — that's our addition
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import defaultShell from "default-shell";
@@ -28,10 +17,7 @@ import { augmentPathForMacOS } from "./shell-env";
 const SHELL_ENV_TIMEOUT_MS = 8_000;
 const CACHE_TTL_MS = 60_000;
 
-/**
- * Minimal env keys needed to bootstrap a login shell.
- * Matches what macOS gives a packaged Electron app.
- */
+/** Matches what macOS gives a packaged Electron app. */
 const SHELL_BOOTSTRAP_KEYS = [
 	"HOME",
 	"USER",
@@ -43,10 +29,10 @@ const SHELL_BOOTSTRAP_KEYS = [
 	"LANG",
 	"LC_ALL",
 	"LC_CTYPE",
-	// macOS specific
+	// macOS
 	"__CF_USER_TEXT_ENCODING",
 	"Apple_PubSub_Socket_Render",
-	// Windows (for future cross-platform support)
+	// Windows
 	"COMSPEC",
 	"USERPROFILE",
 	"SYSTEMROOT",
@@ -56,7 +42,7 @@ const DELIMITER = "__SUPERSET_SHELL_ENV__";
 
 function buildMinimalEnv(): Record<string, string> {
 	const env: Record<string, string> = {
-		// Prevent oh-my-zsh and tmux plugin from blocking
+		// Prevent oh-my-zsh auto-update and tmux plugin from blocking
 		DISABLE_AUTO_UPDATE: "true",
 		ZSH_TMUX_AUTOSTARTED: "true",
 		ZSH_TMUX_AUTOSTART: "false",
@@ -67,20 +53,14 @@ function buildMinimalEnv(): Record<string, string> {
 		if (value) env[key] = value;
 	}
 
-	// Ensure common macOS paths are in PATH so the shell and profile
-	// scripts can find Homebrew and other user-installed tools
 	augmentPathForMacOS(env);
-
 	return env;
 }
 
 function parseEnvOutput(stdout: string): Record<string, string> {
-	const sections = stdout.split(DELIMITER);
-	const envSection = sections[1];
+	const envSection = stdout.split(DELIMITER)[1];
 	if (!envSection) {
-		throw new Error(
-			"Failed to parse shell environment output — delimiter not found",
-		);
+		throw new Error("Failed to parse shell env output — delimiter not found");
 	}
 
 	const result: Record<string, string> = {};
@@ -92,30 +72,17 @@ function parseEnvOutput(stdout: string): Record<string, string> {
 	}
 
 	if (Object.keys(result).length === 0) {
-		throw new Error(
-			"Shell environment resolution returned empty env — shell may have failed to start",
-		);
+		throw new Error("Shell env resolution returned empty — shell may have failed to start");
 	}
 
 	return result;
 }
 
 /**
- * Spawn a login shell with a minimal parent env and capture the resulting
- * environment.
- *
- * Uses detached:true (VS Code pattern) so the shell survives if the parent
- * receives a signal during resolution. Captures stderr for debugging shell
- * startup issues.
- */
-/**
- * Resolve the shell binary to use for env resolution.
- * Uses the same resolution chain as the v1 desktop terminal:
- * default-shell package → SHELL env → /bin/sh fallback.
+ * Uses default-shell package (OS-specific APIs like macOS dscl) to find
+ * the user's shell even when SHELL is unset in GUI-launched apps.
  */
 function resolveShellForEnv(): string {
-	// default-shell uses OS-specific APIs (e.g., dscl on macOS) to find
-	// the user's configured shell even when SHELL is unset (GUI-launched apps)
 	const resolved =
 		typeof defaultShell === "string" && defaultShell.length > 0
 			? defaultShell
@@ -134,7 +101,6 @@ function spawnCleanShellEnv(): Promise<Record<string, string>> {
 	return new Promise((resolve, reject) => {
 		const shell = resolveShellForEnv();
 		const env = buildMinimalEnv();
-
 		const command = `echo -n "${DELIMITER}"; command env; echo -n "${DELIMITER}"; exit`;
 
 		let child: ChildProcess;
@@ -166,7 +132,7 @@ function spawnCleanShellEnv(): Promise<Record<string, string>> {
 			}
 			reject(
 				new Error(
-					`Shell environment resolution timed out after ${SHELL_ENV_TIMEOUT_MS}ms`,
+					`Shell env resolution timed out after ${SHELL_ENV_TIMEOUT_MS}ms`,
 				),
 			);
 		}, SHELL_ENV_TIMEOUT_MS);
@@ -193,14 +159,12 @@ function spawnCleanShellEnv(): Promise<Record<string, string>> {
 			}
 
 			try {
-				const stdout = Buffer.concat(stdoutBuffers).toString("utf8");
-				resolve(parseEnvOutput(stdout));
+				resolve(parseEnvOutput(Buffer.concat(stdoutBuffers).toString("utf8")));
 			} catch (error) {
 				reject(error);
 			}
 		});
 
-		// Detach so the shell doesn't get killed if parent receives a signal
 		child.unref();
 	});
 }
@@ -211,14 +175,9 @@ let cache: Record<string, string> | null = null;
 let cacheTime = 0;
 
 /**
- * Resolve a clean shell-derived environment snapshot for v2 terminal
- * construction.
- *
- * - Spawns the user's login shell with a minimal parent env
- * - Never inherits desktop/Electron runtime env
- * - Never falls back to process.env
- * - Throws on failure — callers must handle the error
- * - Results cached for 60s
+ * Resolve a clean shell-derived environment snapshot.
+ * Never inherits desktop/Electron runtime env. Never falls back to process.env.
+ * Throws on failure. Results cached for 60s.
  */
 export async function getStrictShellEnvironment(): Promise<
 	Record<string, string>

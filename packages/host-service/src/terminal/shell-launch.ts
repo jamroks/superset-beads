@@ -1,46 +1,23 @@
 /**
  * Shell launch configuration for v2 terminals.
  *
- * Determines shell binary, args, and private bootstrap env per shell.
  * Behavioral reference: apps/desktop/src/main/lib/agent-setup/shell-wrappers.ts
  *
- * Upstream patterns followed:
- * - VS Code: ZDOTDIR wrapping for zsh, --init-file for bash, --init-command for fish
- *   (src/vs/platform/terminal/node/terminalEnvironment.ts)
+ * Upstream patterns:
+ * - VS Code: ZDOTDIR for zsh, --init-file for bash, --init-command for fish
  * - Kitty: KITTY_ORIG_ZDOTDIR for zsh, ENV for bash, XDG_DATA_DIRS for fish
- *   (kitty/shell_integration.py)
- *
- * Key design decisions:
- * - zsh: ZDOTDIR redirect to Superset wrapper dir (matches VS Code USER_ZDOTDIR
- *   and kitty KITTY_ORIG_ZDOTDIR patterns). Only applied when wrapper files exist.
- * - bash: --rcfile with Superset rcfile that sources login profiles internally
- *   (matches VS Code --init-file pattern). Falls back to login shell when missing.
- * - fish: --init-command with inline PATH prepend + shell-ready marker
- *   (matches VS Code --init-command pattern).
- * - sh/ksh: login shell only, no custom bootstrap.
- * - Unsupported shells: native launch, no Superset-specific args.
  */
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-// ── Shell resolution ─────────────────────────────────────────────────
-
-/**
- * Resolve the shell binary to launch.
- * Uses SHELL from the base env (which came from the shell-derived snapshot),
- * never from process.env directly.
- *
- * Does not default to /bin/zsh — falls back to /bin/sh (POSIX-guaranteed).
- */
+/** Does not default to /bin/zsh — falls back to /bin/sh (POSIX-guaranteed). */
 export function resolveLaunchShell(baseEnv: Record<string, string>): string {
 	if (process.platform === "win32") {
 		return baseEnv.COMSPEC || "cmd.exe";
 	}
 	return baseEnv.SHELL || "/bin/sh";
 }
-
-// ── Superset shell paths ─────────────────────────────────────────────
 
 export function getSupersetShellPaths(supersetHomeDir: string): {
 	BIN_DIR: string;
@@ -54,21 +31,11 @@ export function getSupersetShellPaths(supersetHomeDir: string): {
 	};
 }
 
-// ── Shell name helper ────────────────────────────────────────────────
-
 function getShellName(shell: string): string {
 	return path.basename(shell);
 }
 
-// ── Fish init command ────────────────────────────────────────────────
-
-/**
- * Build the fish --init-command string.
- *
- * Matches the desktop shell-wrappers.ts fish init exactly:
- * - Idempotent PATH prepend using fish list-aware `contains`
- * - One-shot shell-ready OSC marker via fish_prompt event
- */
+/** Matches desktop shell-wrappers.ts fish init: idempotent PATH prepend + shell-ready OSC marker. */
 function buildFishInitCommand(binDir: string): string {
 	const escaped = binDir
 		.replaceAll("\\", "\\\\")
@@ -85,8 +52,6 @@ function buildFishInitCommand(binDir: string): string {
 	].join("; ");
 }
 
-// ── Shell bootstrap env ──────────────────────────────────────────────
-
 export interface ShellBootstrapParams {
 	shell: string;
 	baseEnv: Record<string, string>;
@@ -94,14 +59,8 @@ export interface ShellBootstrapParams {
 }
 
 /**
- * Return private bootstrap env vars needed to redirect shell startup.
- *
- * zsh: ZDOTDIR redirect (only when wrapper files exist on disk).
- *   - VS Code equivalent: sets ZDOTDIR + USER_ZDOTDIR
- *   - Kitty equivalent: sets ZDOTDIR + KITTY_ORIG_ZDOTDIR
- *   - Ours: sets ZDOTDIR + SUPERSET_ORIG_ZDOTDIR
- *
- * bash/fish/others: no bootstrap env needed — args handle everything.
+ * Private bootstrap env for shell startup redirection.
+ * Only zsh needs env vars (ZDOTDIR). Bash/fish use args only.
  */
 export function getShellBootstrapEnv(
 	params: ShellBootstrapParams,
@@ -123,23 +82,11 @@ export function getShellBootstrapEnv(
 	return {};
 }
 
-// ── Shell launch args ────────────────────────────────────────────────
-
 export interface ShellLaunchParams {
 	shell: string;
 	supersetHomeDir: string;
 }
 
-/**
- * Return the shell args for interactive PTY launch.
- *
- * zsh: login shell (-l). ZDOTDIR redirect in bootstrap env handles integration.
- * bash: --rcfile with Superset rcfile (which sources login profiles internally).
- *   Falls back to login shell (-l) when rcfile doesn't exist yet.
- * fish: login shell (-l) + --init-command for PATH prepend and shell-ready marker.
- * sh/ksh: login shell (-l) only.
- * Others: no args (native launch).
- */
 export function getShellLaunchArgs(params: ShellLaunchParams): string[] {
 	const { shell, supersetHomeDir } = params;
 	const shellName = getShellName(shell);
@@ -165,6 +112,5 @@ export function getShellLaunchArgs(params: ShellLaunchParams): string[] {
 		return ["-l"];
 	}
 
-	// Unsupported shells: launch natively without Superset-specific bootstrap
 	return [];
 }
