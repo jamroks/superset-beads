@@ -36,7 +36,7 @@ export function DashboardSidebarWorkspaceItem({
 	const workspaceStatus = useV2PaneStatusStore((s) =>
 		selectWorkspaceStatus(s, id),
 	);
-	const mockData = { ...getWorkspaceRowMocks(id), workspaceStatus };
+	const mockData = getWorkspaceRowMocks(id);
 	const {
 		cancelRename,
 		handleClick,
@@ -78,7 +78,7 @@ export function DashboardSidebarWorkspaceItem({
 					hostType={hostType}
 					isActive={isActive}
 					onClick={isCreating ? undefined : handleClick}
-					workspaceStatus={isCreating ? null : mockData.workspaceStatus}
+					workspaceStatus={isCreating ? null : workspaceStatus}
 					creationStatus={creationStatus}
 					disabled={isCreating}
 					aria-label={
@@ -139,7 +139,8 @@ export function DashboardSidebarWorkspaceItem({
 			isRenaming={isRenaming}
 			renameValue={renameValue}
 			shortcutLabel={shortcutLabel}
-			mockData={isCreating ? { ...mockData, workspaceStatus: null } : mockData}
+			mockData={mockData}
+			workspaceStatus={isCreating ? null : workspaceStatus}
 			onClick={isCreating ? undefined : handleClick}
 			onDoubleClick={isCreating ? undefined : startRename}
 			onDeleteClick={() => setIsDeleteDialogOpen(true)}

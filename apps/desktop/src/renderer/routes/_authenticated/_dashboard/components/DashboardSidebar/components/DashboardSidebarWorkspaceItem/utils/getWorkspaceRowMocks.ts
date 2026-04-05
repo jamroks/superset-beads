@@ -1,11 +1,8 @@
-import type { ActivePaneStatus } from "shared/tabs-types";
-
 export interface WorkspaceRowMockData {
 	diffStats: {
 		additions: number;
 		deletions: number;
 	};
-	workspaceStatus: ActivePaneStatus | null;
 }
 
 function getSeed(input: string): number {
@@ -25,6 +22,5 @@ export function getWorkspaceRowMocks(
 			additions: (seed % 24) + 3,
 			deletions: (seed % 9) + 1,
 		},
-		workspaceStatus: null,
 	};
 }

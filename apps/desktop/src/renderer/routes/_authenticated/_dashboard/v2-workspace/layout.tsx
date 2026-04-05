@@ -3,7 +3,6 @@ import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute, Outlet, useMatchRoute } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import { useV2AgentHookListener } from "renderer/stores/v2-pane-status";
 import {
 	getHostServiceHeaders,
 	getHostServiceWsToken,
@@ -21,7 +20,6 @@ export const Route = createFileRoute("/_authenticated/_dashboard/v2-workspace")(
 );
 
 function V2WorkspaceLayout() {
-	useV2AgentHookListener();
 	const matchRoute = useMatchRoute();
 	const workspaceMatch = matchRoute({
 		to: "/v2-workspace/$workspaceId",
