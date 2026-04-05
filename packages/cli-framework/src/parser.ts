@@ -3,6 +3,8 @@ import type { ProcessedBuilderConfig } from "./option";
 
 const AGENT_ENV_VARS = [
 	"CLAUDE_CODE",
+	"CLAUDECODE",
+	"CLAUDE_CODE_ENTRYPOINT",
 	"CODEX_CLI",
 	"GEMINI_CLI",
 	"SUPERSET_AGENT",
