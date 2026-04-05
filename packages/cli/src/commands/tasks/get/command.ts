@@ -17,8 +17,8 @@ export default command({
 			data: task,
 			message: [
 				`${task.slug}: ${task.title}`,
-				`Status:   ${task.priority ?? "—"}`,
 				`Priority: ${task.priority ?? "—"}`,
+				`Branch:   ${task.branch ?? "—"}`,
 				task.description ? `\n${task.description}` : "",
 			]
 				.filter(Boolean)

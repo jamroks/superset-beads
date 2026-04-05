@@ -76,6 +76,7 @@ export function table(
 	data: Record<string, unknown>[],
 	columns: string[],
 	headers?: string[],
+	maxColWidth = 60,
 ): string {
 	if (data.length === 0) return "No results.";
 
@@ -83,13 +84,16 @@ export function table(
 	const rows = data.map((row) =>
 		columns.map((col) => {
 			const val = getNestedValue(row, col);
-			return val === null || val === undefined ? "—" : String(val);
+			const str = val === null || val === undefined ? "—" : String(val);
+			return str.length > maxColWidth
+				? `${str.slice(0, maxColWidth - 1)}…`
+				: str;
 		}),
 	);
 
-	// Calculate column widths
+	// Calculate column widths (capped by terminal width heuristic)
 	const widths = hdrs.map((h, i) =>
-		Math.max(h.length, ...rows.map((r) => r[i]!.length)),
+		Math.min(maxColWidth, Math.max(h.length, ...rows.map((r) => r[i]!.length))),
 	);
 
 	// Render

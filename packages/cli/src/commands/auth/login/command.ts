@@ -1,6 +1,7 @@
 import { command, string } from "@superset/cli-framework";
 import * as p from "@clack/prompts";
 import { readConfig, writeConfig, getApiUrl } from "../../../lib/config";
+import { createApiClient } from "../../../lib/api-client";
 import { deviceAuth } from "../../../lib/auth";
 
 export default command({
@@ -21,16 +22,26 @@ export default command({
 		const s = p.spinner();
 		s.start("Waiting for browser authorization...");
 
-		const token = await deviceAuth(apiUrl, opts.signal);
+		const result = await deviceAuth(apiUrl, opts.signal);
 
-		config.auth = { accessToken: token };
+		config.auth = { accessToken: result.token };
 		writeConfig(config);
 
 		s.stop("Authorized!");
+
+		// Show who we logged in as
+		try {
+			const api = createApiClient(config);
+			const user = await api.user.me.query();
+			const org = await api.user.myOrganization.query();
+			p.log.info(`${user.name} (${user.email})`);
+			if (org) p.log.info(`Organization: ${org.name}`);
+		} catch {
+			// Non-fatal — login succeeded even if whoami fails
+		}
+
 		p.outro("Logged in successfully.");
 
-		return {
-			data: { apiUrl },
-		};
+		return { data: { apiUrl } };
 	},
 });

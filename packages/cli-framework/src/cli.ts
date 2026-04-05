@@ -41,7 +41,27 @@ export async function cli(config: CLIConfig): Promise<void> {
 		}
 
 		if (error instanceof Error) {
-			process.stderr.write(`Error: ${error.message}\n`);
+			// tRPC errors have a `code` and `data` field
+			const trpcError = error as Error & {
+				code?: string;
+				data?: { code?: string };
+			};
+			const code =
+				trpcError.data?.code ?? trpcError.code;
+
+			if (code === "UNAUTHORIZED") {
+				process.stderr.write(
+					"Error: Session expired\nHint: Run: superset auth login\n",
+				);
+			} else if (code === "NOT_FOUND") {
+				process.stderr.write(`Error: Not found\n`);
+			} else if (code === "FETCH_ERROR" || error.message.includes("fetch failed")) {
+				process.stderr.write(
+					"Error: Could not connect to API\nHint: Is the API running?\n",
+				);
+			} else {
+				process.stderr.write(`Error: ${error.message}\n`);
+			}
 			process.exit(1);
 		}
 

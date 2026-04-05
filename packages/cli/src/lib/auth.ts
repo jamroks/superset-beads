@@ -22,10 +22,16 @@ type DeviceTokenResponse = {
 /**
  * OAuth 2.0 Device Authorization Flow (RFC 8628).
  */
+export type DeviceAuthResult = {
+	token: string;
+	userCode: string;
+	verificationUrl: string;
+};
+
 export async function deviceAuth(
 	apiUrl: string,
 	signal: AbortSignal,
-): Promise<string> {
+): Promise<DeviceAuthResult> {
 	const clientId = await ensureClientId(apiUrl);
 
 	// Step 1: Request device code
@@ -59,12 +65,6 @@ export async function deviceAuth(
 	const { exec } = await import("node:child_process");
 	exec(`${openCmd} "${verificationUrl}"`);
 
-	console.log("Opening browser to authorize...");
-	console.log(`If it doesn't open, visit: ${verificationUrl}`);
-	if (codeData.user_code) {
-		console.log(`Your code: ${codeData.user_code}\n`);
-	}
-
 	// Step 3: Poll for token
 	const interval = (codeData.interval || 5) * 1000;
 	const deadline = Date.now() + codeData.expires_in * 1000;
@@ -88,7 +88,11 @@ export async function deviceAuth(
 
 		if (tokenRes.ok) {
 			const tokenData = (await tokenRes.json()) as DeviceTokenResponse;
-			return tokenData.access_token;
+			return {
+				token: tokenData.access_token,
+				userCode: codeData.user_code,
+				verificationUrl,
+			};
 		}
 
 		const error = (await tokenRes.json()) as { error?: string };
