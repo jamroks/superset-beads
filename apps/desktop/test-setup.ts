@@ -33,6 +33,8 @@ const mockHead = {
 
 // biome-ignore lint/suspicious/noExplicitAny: Test setup requires extending globalThis
 (globalThis as any).document = {
+	addEventListener: mock(() => {}),
+	removeEventListener: mock(() => {}),
 	documentElement: {
 		style: {
 			setProperty: (key: string, value: string) => mockStyleMap.set(key, value),
