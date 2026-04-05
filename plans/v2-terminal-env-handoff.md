@@ -8,6 +8,7 @@ Define and implement a v2 terminal env contract that:
 
 - matches common terminal patterns from GitHub sources
 - preserves user-needed shell env for normal shell behavior
+- includes explicit shell integration behavior for common shells
 - avoids leaking desktop, Electron, and host-service runtime env into PTYs
 - keeps the useful parts of the v1 Superset notification contract, but renames
   the v2-specific keys to make the contract clearer
@@ -149,7 +150,6 @@ SUPERSET_TERMINAL_ID=<terminal id>
 SUPERSET_WORKSPACE_ID=<workspace id>
 SUPERSET_WORKSPACE_PATH=<worktree path>
 SUPERSET_ROOT_PATH=<repo root path, when available>
-SUPERSET_WORKSPACE_NAME=<workspace display name, optional or empty until explicitly sourced>
 SUPERSET_ENV=<development|production>
 SUPERSET_AGENT_HOOK_PORT=<desktop local agent hook server port>
 SUPERSET_AGENT_HOOK_VERSION=<agent hook protocol version>
@@ -169,7 +169,7 @@ Do not use a blanket `SUPERSET_*` passthrough rule in v2.
 
 The v2 Superset metadata surface should stay explicit and minimal.
 
-### 5. Shell behavior
+### 5. Shell behavior and integration
 
 V2 should support the user's shell out of the box, similar to VS Code.
 
@@ -187,9 +187,9 @@ Use a hard-coded fallback shell only as a last resort:
 
 Do not default to `/bin/zsh` just because the current implementation does.
 
-### 6. Shell integration
+Shell integration is in scope for v2.
 
-If v2 later adds shell integration, follow the VS Code and kitty pattern:
+Follow the VS Code and kitty pattern:
 
 - use private bootstrap vars per shell only for startup
 - examples: `ZDOTDIR`, `BASH_ENV`, `XDG_DATA_DIRS`
@@ -197,7 +197,35 @@ If v2 later adds shell integration, follow the VS Code and kitty pattern:
 
 Do not expose those bootstrap vars as part of the public v2 terminal contract.
 
-This means v2 should not reuse the v1 desktop terminal env builder as-is.
+Supported shells for the first v2 implementation:
+
+- `zsh`
+- `bash`
+- `fish`
+- `sh` and `ksh` as reduced-functionality login-shell fallbacks
+
+Unsupported shells should still launch natively, but without Superset-specific
+shell bootstrap beyond the base env contract.
+
+Per-shell integration design:
+
+- `zsh`
+  - use wrapper startup through `ZDOTDIR`
+  - set `SUPERSET_ORIG_ZDOTDIR` and temporary `ZDOTDIR`
+  - launch as a login shell
+- `bash`
+  - use the generated Superset rcfile when available
+  - launch with `--rcfile <path>`
+- `fish`
+  - use `-l --init-command ...`
+  - prepend Superset bin dir idempotently after fish config loads
+  - emit the shell-ready marker using fish-native event hooks
+- `sh` and `ksh`
+  - launch as login shells
+  - no custom wrapper files in the first pass
+
+This means v2 should not reuse the v1 desktop terminal env builder as-is, but
+it should reuse the proven shell integration behavior and path conventions.
 
 `apps/desktop/src/main/lib/terminal/env.ts` currently mixes together:
 
@@ -207,6 +235,18 @@ This means v2 should not reuse the v1 desktop terminal env builder as-is.
 - legacy Superset notification metadata
 
 That builder should remain v1-oriented.
+
+Instead, v2 should have a separate shell launch config layer that produces:
+
+- `shell`
+- `args`
+- private bootstrap env
+
+from:
+
+- resolved shell path
+- `SUPERSET_HOME_DIR`
+- wrapper file availability
 
 ### 7. Dynamic state
 
@@ -252,11 +292,9 @@ Implication:
 - `SUPERSET_TERMINAL_ID`, `SUPERSET_WORKSPACE_ID`, and
   `SUPERSET_WORKSPACE_PATH` are straightforward
 - `SUPERSET_ROOT_PATH` is straightforward with a join
-- `SUPERSET_WORKSPACE_NAME` should either be explicitly sourced and threaded to
-  v2, or left empty until there is a first-class source
+- `SUPERSET_WORKSPACE_NAME` should not be part of the first v2 PTY contract
 
-Do not invent a display name from `branch` or `id` unless product explicitly
-accepts that behavior.
+Do not invent a display name from `branch` or `id`.
 
 ## Files to update
 
@@ -266,6 +304,7 @@ Primary implementation targets:
 - `apps/desktop/src/lib/trpc/routers/workspaces/utils/shell-env.ts`
 - `packages/host-service/src/terminal/terminal.ts`
 - new: `packages/host-service/src/terminal/env.ts`
+- new or extracted: shared shell launch helper for zsh/bash/fish behavior
 
 Secondary follow-up targets:
 
@@ -293,7 +332,7 @@ Secondary follow-up targets:
    - `resolveLaunchShell(baseEnv)`
    - `normalizeUtf8Locale(baseEnv)`
    - `stripTerminalRuntimeEnv(baseEnv)`
-   - `buildV2TerminalEnv({ terminalId, workspaceId, workspacePath, rootPath, workspaceName, cwd, baseEnv, appVersion, nodeEnv, notificationsPort, notificationsHookVersion })`
+   - `buildV2TerminalEnv({ terminalId, workspaceId, workspacePath, rootPath, cwd, baseEnv, appVersion, nodeEnv, agentHookPort, agentHookVersion })`
 
 3. Update `packages/host-service/src/terminal/terminal.ts`.
 
@@ -311,13 +350,33 @@ Secondary follow-up targets:
    - `SUPERSET_AGENT_HOOK_PORT` comes from the desktop-provided runtime env
    - `SUPERSET_AGENT_HOOK_VERSION` comes from a single v2 constant
 
-5. Leave shell bootstrap out of the first v2 change.
+5. Add a v2 shell launch config helper.
 
-   - no `ZDOTDIR`
-   - no `BASH_ENV`
-   - no wrapper-specific temporary vars
+   Suggested shape:
 
-6. Keep v1 and v2 builders separate.
+   - `getSupersetShellPaths({ supersetHomeDir })`
+   - `getShellBootstrapEnv({ shell, paths, baseEnv })`
+   - `getShellLaunchArgs({ shell, paths })`
+   - `resolveShellLaunchConfig({ shell, supersetHomeDir, baseEnv })`
+
+   Required behavior:
+
+   - `zsh` uses `ZDOTDIR` wrapper flow
+   - `bash` uses generated rcfile
+   - `fish` uses `--init-command`
+   - unknown shells degrade gracefully to native launch
+
+6. Reuse the existing wrapper path conventions from desktop agent setup.
+
+   - `SUPERSET_HOME_DIR/bin`
+   - `SUPERSET_HOME_DIR/zsh`
+   - `SUPERSET_HOME_DIR/bash`
+
+   Desktop remains responsible for creating the wrapper files.
+   Host-service remains responsible for choosing shell args and bootstrap env
+   for PTY launch.
+
+7. Keep v1 and v2 builders separate.
 
    - v1 builder in desktop keeps the old desktop hook/runtime behavior
    - v2 builder in host-service owns the new PTY contract
@@ -328,14 +387,19 @@ Secondary follow-up targets:
 - v2 host-service launch env no longer starts from raw desktop `process.env`
   without a tightening step
 - user-needed shell env still works for normal tools and version managers
+- zsh, bash, and fish launch with Superset shell integration behavior
 - v2 PTY env includes `TERM_PROGRAM=Superset`
 - v2 PTY env includes `SUPERSET_TERMINAL_ID`
+- v2 PTY env includes `SUPERSET_WORKSPACE_ID`
+- v2 PTY env includes `SUPERSET_WORKSPACE_PATH`
+- v2 PTY env includes `SUPERSET_ROOT_PATH` when it is derivable
 - v2 PTY env includes `SUPERSET_AGENT_HOOK_PORT`
 - v2 PTY env includes `SUPERSET_AGENT_HOOK_VERSION`
 - v2 PTY env does not include `SUPERSET_PANE_ID`
 - v2 PTY env does not include `SUPERSET_TAB_ID`
 - v2 PTY env does not include `SUPERSET_PORT`
 - v2 PTY env does not include `SUPERSET_HOOK_VERSION`
+- v2 PTY env does not require `SUPERSET_WORKSPACE_NAME`
 - the v2 contract is defined in one place and documented
 
 ## Tests
@@ -347,6 +411,8 @@ Add or update tests for:
 - desktop/Electron runtime vars do not leak into PTY env
 - `TERM_PROGRAM` and `TERM_PROGRAM_VERSION` are present
 - `SUPERSET_TERMINAL_ID` is present
+- `SUPERSET_WORKSPACE_ID` is present
+- `SUPERSET_WORKSPACE_PATH` is present
 - `SUPERSET_AGENT_HOOK_PORT` is present
 - `SUPERSET_AGENT_HOOK_VERSION` is present
 - `SUPERSET_PANE_ID` is absent
@@ -355,6 +421,10 @@ Add or update tests for:
 - `SUPERSET_HOOK_VERSION` is absent
 - launch shell resolution prefers the user's shell and only falls back as a
   last resort
+- zsh launch config sets private `ZDOTDIR` bootstrap env correctly
+- bash launch config uses rcfile behavior correctly
+- fish launch config uses `--init-command` behavior correctly
+- unsupported shells fall back to native launch without crashing
 
 Recommended test location:
 
@@ -363,7 +433,6 @@ Recommended test location:
 ## Non-goals
 
 - changing terminal transport from workspace-scoped to terminal-scoped
-- adding shell integration in this change
 - recreating the full v1 desktop hook contract unchanged
 - using env vars for dynamic runtime session state
 
@@ -372,9 +441,11 @@ Recommended test location:
 - `apps/desktop/src/main/lib/terminal/env.ts` is not the right shared source
   for v2 because it is coupled to v1 desktop shell wrappers and legacy
   notification env names
+- the pure shell launch logic in `apps/desktop/src/main/lib/agent-setup/shell-wrappers.ts`
+  is the right behavioral reference for zsh, bash, and fish support
 - `packages/host-service/src/terminal/terminal.ts` currently only has
   `workspaceId` on websocket attach, so launch cwd remains the workspace
   worktree path for this change
-- if full `SUPERSET_WORKSPACE_NAME` parity is required, add it explicitly to
-  the v2 terminal creation context instead of trying to recover it from a loose
-  prefix passthrough
+- `SUPERSET_WORKSPACE_NAME` is intentionally omitted from the first v2 PTY
+  contract because there is no clean host-service source for it and no concrete
+  v2 runtime consumer requiring it
