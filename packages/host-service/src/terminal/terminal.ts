@@ -8,6 +8,7 @@ import { projects, terminalSessions, workspaces } from "../db/schema";
 import {
 	buildV2TerminalEnv,
 	getShellLaunchArgs,
+	getTerminalBaseEnv,
 	resolveLaunchShell,
 } from "./env";
 
@@ -54,17 +55,6 @@ function sendMessage(
 ) {
 	if (socket.readyState !== 1) return;
 	socket.send(JSON.stringify(message));
-}
-
-/** Capture a string-only snapshot of the current process env. */
-function getProcessEnvSnapshot(): Record<string, string> {
-	const snapshot: Record<string, string> = {};
-	for (const [key, value] of Object.entries(process.env)) {
-		if (typeof value === "string") {
-			snapshot[key] = value;
-		}
-	}
-	return snapshot;
 }
 
 function bufferOutput(session: TerminalSession, data: string) {
@@ -141,8 +131,10 @@ function createTerminalSessionInternal({
 	}
 
 	const cwd = workspace.worktreePath;
-	const baseEnv = getProcessEnvSnapshot();
-	const supersetHomeDir = baseEnv.SUPERSET_HOME_DIR || "";
+
+	// Use the preserved shell snapshot — never live process.env
+	const baseEnv = getTerminalBaseEnv();
+	const supersetHomeDir = process.env.SUPERSET_HOME_DIR || "";
 	const shell = resolveLaunchShell(baseEnv);
 	const shellArgs = getShellLaunchArgs({ shell, supersetHomeDir });
 	const ptyEnv = buildV2TerminalEnv({
@@ -154,6 +146,11 @@ function createTerminalSessionInternal({
 		workspaceId,
 		workspacePath: workspace.worktreePath,
 		rootPath,
+		hostServiceVersion: process.env.HOST_SERVICE_VERSION || "unknown",
+		supersetEnv:
+			process.env.NODE_ENV === "development" ? "development" : "production",
+		agentHookPort: process.env.SUPERSET_AGENT_HOOK_PORT || "",
+		agentHookVersion: process.env.SUPERSET_AGENT_HOOK_VERSION || "",
 	});
 
 	let pty: IPty;

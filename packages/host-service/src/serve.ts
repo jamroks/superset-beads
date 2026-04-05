@@ -2,6 +2,11 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app";
 import { env } from "./env";
 import { PskHostAuthProvider } from "./providers/host-auth";
+import { initTerminalBaseEnv } from "./terminal/env";
+
+// Capture the shell-derived base env before any runtime modifications.
+// This preserved snapshot is the only valid base env for PTY construction.
+initTerminalBaseEnv();
 
 const hostAuth = new PskHostAuthProvider(env.HOST_SERVICE_SECRET);
 const { app, injectWebSocket } = createApp({

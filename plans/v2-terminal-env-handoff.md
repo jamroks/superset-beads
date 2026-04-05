@@ -59,6 +59,8 @@ GitHub sources:
 
 - VS Code terminal env injection:
   https://github.com/microsoft/vscode/blob/main/src/vs/platform/terminal/node/terminalEnvironment.ts
+- VS Code process env sanitization:
+  https://github.com/microsoft/vscode/blob/main/src/vs/base/common/processes.ts
 - kitty shell integration:
   https://github.com/kovidgoyal/kitty/blob/master/docs/shell-integration.rst
 - WezTerm `TERM` docs:
@@ -72,9 +74,27 @@ What these tools converge on:
 
 - keep the public env surface small
 - use shell-specific bootstrap vars only when loading shell integration
+- sanitize app/runtime env before child processes and terminals instead of
+  inheriting it wholesale
 - do not rely on env vars for dynamic session state
 - keep `TERM` conservative unless terminfo is actually shipped
 - do not treat env vars as the only reliable terminal identity signal
+
+Concrete VS Code pattern to follow:
+
+- VS Code uses a small set of private bootstrap vars for shell integration such
+  as `VSCODE_INJECTION`, `VSCODE_SHELL_ENV_REPORTING`, `VSCODE_PATH_PREFIX`,
+  `ZDOTDIR`, and `USER_ZDOTDIR`
+- VS Code also sanitizes process env before crossing process boundaries by
+  stripping Electron and VS Code runtime keys like `ELECTRON_*` and most
+  `VSCODE_*`
+
+Superset v2 should follow the same shape:
+
+- shell-derived env is the base
+- Superset adds a small explicit public contract
+- Superset strips its own runtime env before PTY launch instead of inheriting it
+  by default
 
 ## Refined v2 contract
 
@@ -115,6 +135,8 @@ Important:
 
 - the current helper falls back to `process.env` when shell env resolution
   fails
+- the current helper does not currently expose whether the returned env is a
+  real shell snapshot or that fallback
 - that fallback must not be used for v2 terminal env construction
 - if a real shell snapshot cannot be resolved, v2 terminal creation should fail
   with an explicit error instead of silently inheriting desktop or host-service
@@ -337,10 +359,11 @@ Secondary follow-up targets:
 
    Required behavior:
 
-   - first, call `getShellEnvironment()`
-   - accept the result only when it is a real shell snapshot
-   - do not accept the helper's internal `process.env` fallback for terminal
-     env construction
+   - first, replace or wrap `getShellEnvironment()` so the caller can
+     distinguish `source: "shell"` from `source: "fallback"`
+   - accept the result only when `source === "shell"`
+   - do not accept the helper's internal `process.env` fallback for terminal env
+     construction
    - if a real shell snapshot cannot be resolved, throw an explicit error that
      blocks v2 terminal creation
 
@@ -482,9 +505,17 @@ Secondary follow-up targets:
    - `npm_`
    - `npm_config_`
    - `ELECTRON_`
+   - `VSCODE_`
    - `VITE_`
    - `NEXT_PUBLIC_`
    - `TURBO_`
+
+   Treat these categories as internal runtime env, not terminal env:
+
+   - `HOST_*`
+   - `DESKTOP_*`
+   - `DEVICE_*`
+   - non-kept `SUPERSET_*`
 
    Keep these explicit Superset support keys when present:
 
