@@ -17,5 +17,11 @@ export type { CLIConfig } from "./cli";
 // Output utilities
 export { table, formatOutput } from "./output";
 
+// Router utilities (for static/compiled mode)
+export { buildStaticTree, routeCommand, resolveStaticMiddleware } from "./router";
+export type { CommandNode } from "./help";
+export { generateRootHelp, generateGroupHelp, generateCommandHelp } from "./help";
+export { parseArgv, isAgentMode, camelToKebab } from "./parser";
+
 // Errors
 export { CLIError, suggestSimilar } from "./errors";

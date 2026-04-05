@@ -190,3 +190,99 @@ export function resolveMiddleware(
 
 	return activeMiddleware;
 }
+
+/**
+ * Build a command tree from static entries (for compiled binaries).
+ * No filesystem access needed.
+ */
+export function buildStaticTree(
+	groups: { path: string[]; description: string; aliases?: string[] }[],
+	commands: { path: string[]; command: CommandConfig }[],
+	middlewareMap: Record<string, MiddlewareExport>,
+): {
+	root: CommandNode;
+	middlewares: Map<string, MiddlewareExport>;
+	commandMap: Map<string, CommandConfig>;
+} {
+	const root: CommandNode = {
+		name: "",
+		children: new Map(),
+		hasCommand: false,
+	};
+
+	const commandMap = new Map<string, CommandConfig>();
+
+	// Create group nodes
+	for (const group of groups) {
+		let node = root;
+		for (const segment of group.path) {
+			if (!node.children.has(segment)) {
+				node.children.set(segment, {
+					name: segment,
+					children: new Map(),
+					hasCommand: false,
+				});
+			}
+			node = node.children.get(segment)!;
+		}
+		node.description = group.description;
+		node.aliases = group.aliases;
+	}
+
+	// Create command nodes
+	for (const entry of commands) {
+		let node = root;
+		for (let i = 0; i < entry.path.length; i++) {
+			const segment = entry.path[i]!;
+			if (!node.children.has(segment)) {
+				node.children.set(segment, {
+					name: segment,
+					children: new Map(),
+					hasCommand: false,
+				});
+			}
+			node = node.children.get(segment)!;
+		}
+		node.hasCommand = true;
+		node.description = entry.command.description;
+		commandMap.set(entry.path.join("/"), entry.command);
+	}
+
+	// Convert middleware map to the format resolveMiddleware expects
+	const middlewares = new Map<string, MiddlewareExport>();
+	for (const [key, mw] of Object.entries(middlewareMap)) {
+		middlewares.set(key, mw);
+	}
+
+	return { root, middlewares, commandMap };
+}
+
+/**
+ * Resolve middleware using path-based keys (for static mode).
+ */
+export function resolveStaticMiddleware(
+	commandPath: string[],
+	middlewares: Map<string, MiddlewareExport>,
+): MiddlewareFn | null {
+	let activeMiddleware: MiddlewareFn | null = null;
+
+	// Check root
+	const rootMw = middlewares.get("");
+	if (rootMw && rootMw !== skip) {
+		activeMiddleware = rootMw as MiddlewareFn;
+	}
+
+	// Walk command path
+	let pathSoFar = "";
+	for (const segment of commandPath) {
+		pathSoFar = pathSoFar ? `${pathSoFar}/${segment}` : segment;
+		const mw = middlewares.get(pathSoFar) ?? middlewares.get(segment);
+		if (mw === skip) {
+			activeMiddleware = null;
+		} else if (mw) {
+			activeMiddleware = mw as MiddlewareFn;
+		}
+	}
+
+	return activeMiddleware;
+}
