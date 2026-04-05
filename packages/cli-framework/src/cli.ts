@@ -1,7 +1,7 @@
 import type { GenericBuilderInternals, ProcessedBuilderConfig } from "./option";
 import type { CommandConfig } from "./command";
 import { CLIError } from "./errors";
-import { parseArgv, isAgentMode } from "./parser";
+import { parseArgv, isAgentMode, camelToKebab } from "./parser";
 import { formatOutput } from "./output";
 import {
 	scanCommands,
@@ -61,7 +61,7 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 	if (config.globals) {
 		for (const [key, builder] of Object.entries(config.globals)) {
 			const cfg = (builder as GenericBuilderInternals)._.config;
-			globalConfigs[key] = { ...cfg, name: cfg.name ?? key };
+			globalConfigs[key] = { ...cfg, name: cfg.name ?? camelToKebab(key) };
 		}
 	}
 
@@ -86,12 +86,13 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 		const node = getNode(root, routeResult.commandPath);
 
 		if (node && cmd) {
-			// Populate node with command's option info for help
+			// Populate node with command info for help
+			node.description = cmd.description;
 			if (cmd.options) {
 				node.options = {};
 				for (const [key, builder] of Object.entries(cmd.options)) {
 					const cfg = (builder as GenericBuilderInternals)._.config;
-					node.options[key] = { ...cfg, name: cfg.name ?? key };
+					node.options[key] = { ...cfg, name: cfg.name ?? camelToKebab(key) };
 				}
 			}
 			if (cmd.args) {
@@ -140,7 +141,7 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 	if (cmd.options) {
 		for (const [key, builder] of Object.entries(cmd.options)) {
 			const cfg = (builder as GenericBuilderInternals)._.config;
-			optionConfigs[key] = { ...cfg, name: cfg.name ?? key };
+			optionConfigs[key] = { ...cfg, name: cfg.name ?? camelToKebab(key) };
 		}
 	}
 
@@ -155,6 +156,7 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 	if (parsed.options._help) {
 		const node = getNode(root, commandPath);
 		if (node) {
+			node.description = cmd.description;
 			node.options = optionConfigs;
 			if (cmd.args) {
 				node.args = (cmd.args as GenericBuilderInternals[]).map((builder) => {

@@ -13,6 +13,10 @@ export function isAgentMode(): boolean {
 	return AGENT_ENV_VARS.some((v) => process.env[v] !== undefined);
 }
 
+export function camelToKebab(str: string): string {
+	return str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+}
+
 export type ParseResult = {
 	commandPath: string[];
 	options: Record<string, unknown>;
