@@ -1,64 +1,34 @@
-import { useEffect } from "react";
-import { useRecordHotkeys as useRecordHotkeysLib } from "react-hotkeys-hook";
+import { useEffect, useRef } from "react";
 import { HOTKEYS, type HotkeyId, PLATFORM } from "../../registry";
 import { useHotkeyOverridesStore } from "../../stores/hotkeyOverridesStore";
 import type { Platform } from "../../types";
 
 // ---------------------------------------------------------------------------
-// Helpers (co-located — only used by this hook)
+// Helpers
 // ---------------------------------------------------------------------------
 
 const MODIFIER_ORDER = ["meta", "ctrl", "alt", "shift"] as const;
 
-/** Convert a Set of pressed keys into a canonical key string */
-function keysSetToString(keys: Set<string>): string | null {
+function captureHotkeyFromEvent(event: KeyboardEvent): string | null {
+	const key = event.key.toLowerCase();
+	if (["shift", "ctrl", "alt", "meta", "dead", "unidentified"].includes(key))
+		return null;
+
+	// Must include ctrl or meta (or be F1-F12)
+	const isFKey = /^f([1-9]|1[0-2])$/.test(key);
+	if (!isFKey && !event.ctrlKey && !event.metaKey) return null;
+
+	// Reject meta on non-Mac
+	if (PLATFORM !== "mac" && event.metaKey) return null;
+
 	const modifiers: string[] = [];
-	let primary: string | null = null;
+	if (event.metaKey) modifiers.push("meta");
+	if (event.ctrlKey) modifiers.push("ctrl");
+	if (event.altKey) modifiers.push("alt");
+	if (event.shiftKey) modifiers.push("shift");
 
-	for (const key of keys) {
-		const lower = key.toLowerCase();
-		if (MODIFIER_ORDER.includes(lower as (typeof MODIFIER_ORDER)[number])) {
-			modifiers.push(lower);
-		} else if (!primary) {
-			primary = lower;
-		}
-	}
-
-	if (!primary) return null;
 	const ordered = MODIFIER_ORDER.filter((m) => modifiers.includes(m));
-	return [...ordered, primary].join("+");
-}
-
-/** Canonicalize a key string: consistent modifier order, lowercase */
-function canonicalize(keys: string): string | null {
-	const parts = keys
-		.toLowerCase()
-		.split("+")
-		.map((p) => p.trim())
-		.filter(Boolean);
-	const modifiers: string[] = [];
-	let primary: string | null = null;
-
-	for (const part of parts) {
-		if (MODIFIER_ORDER.includes(part as (typeof MODIFIER_ORDER)[number])) {
-			modifiers.push(part);
-		} else if (!primary) {
-			primary = part;
-		} else {
-			return null;
-		}
-	}
-
-	if (!primary) return null;
-	const ordered = MODIFIER_ORDER.filter((m) => modifiers.includes(m));
-	return [...ordered, primary].join("+");
-}
-
-/** App hotkeys must include ctrl or meta (or be F1-F12) */
-function isValidAppHotkey(keys: string): boolean {
-	const lower = keys.toLowerCase();
-	if (/\bf([1-9]|1[0-2])\b/.test(lower)) return true;
-	return lower.includes("ctrl+") || lower.includes("meta+");
+	return [...ordered, key].join("+");
 }
 
 const TERMINAL_RESERVED = new Set([
@@ -78,27 +48,20 @@ const OS_RESERVED: Record<Platform, string[]> = {
 
 function checkReserved(
 	keys: string,
-	platform: Platform,
 ): { reason: string; severity: "error" | "warning" } | null {
-	const normalized = keys.toLowerCase();
-	if (TERMINAL_RESERVED.has(normalized)) {
+	if (TERMINAL_RESERVED.has(keys))
 		return { reason: "Reserved by terminal", severity: "error" };
-	}
-	if (OS_RESERVED[platform].includes(normalized)) {
+	if (OS_RESERVED[PLATFORM].includes(keys))
 		return { reason: "Reserved by OS", severity: "warning" };
-	}
 	return null;
 }
 
 function getHotkeyConflict(keys: string, excludeId: HotkeyId): HotkeyId | null {
-	const canonical = canonicalize(keys);
-	if (!canonical) return null;
 	const { overrides } = useHotkeyOverridesStore.getState();
-
 	for (const id of Object.keys(HOTKEYS) as HotkeyId[]) {
 		if (id === excludeId) continue;
 		const effective = id in overrides ? overrides[id] : HOTKEYS[id].key;
-		if (effective === canonical) return id;
+		if (effective === keys) return id;
 	}
 	return null;
 }
@@ -109,6 +72,7 @@ function getHotkeyConflict(keys: string, excludeId: HotkeyId): HotkeyId | null {
 
 interface UseRecordHotkeysOptions {
 	onSave?: (id: HotkeyId, keys: string) => void;
+	onCancel?: () => void;
 	onUnassign?: (id: HotkeyId) => void;
 	onConflict?: (targetId: HotkeyId, keys: string, conflictId: HotkeyId) => void;
 	onReserved?: (
@@ -121,64 +85,62 @@ export function useRecordHotkeys(
 	recordingId: HotkeyId | null,
 	options?: UseRecordHotkeysOptions,
 ) {
-	const [keys, recorder] = useRecordHotkeysLib();
+	const optionsRef = useRef(options);
+	optionsRef.current = options;
+
 	const setOverride = useHotkeyOverridesStore((s) => s.setOverride);
 	const resetOverride = useHotkeyOverridesStore((s) => s.resetOverride);
 
 	useEffect(() => {
-		if (recordingId) recorder.start();
-		else recorder.stop();
-	}, [recordingId, recorder]);
+		if (!recordingId) return;
 
-	useEffect(() => {
-		if (!recorder.isRecording || keys.size === 0 || !recordingId) return;
+		const handler = (event: KeyboardEvent) => {
+			event.preventDefault();
+			event.stopPropagation();
 
-		if (keys.has("escape")) {
-			recorder.stop();
-			recorder.resetKeys();
-			return;
-		}
+			if (event.key === "Escape") {
+				optionsRef.current?.onCancel?.();
+				return;
+			}
 
-		if (keys.has("backspace") || keys.has("delete")) {
-			resetOverride(recordingId);
-			recorder.stop();
-			recorder.resetKeys();
-			options?.onUnassign?.(recordingId);
-			return;
-		}
+			if (event.key === "Backspace" || event.key === "Delete") {
+				resetOverride(recordingId);
+				optionsRef.current?.onUnassign?.(recordingId);
+				return;
+			}
 
-		const canonical = keysSetToString(keys);
-		if (!canonical) return;
-		if (!isValidAppHotkey(canonical)) return;
-		if (PLATFORM !== "mac" && canonical.includes("meta+")) return;
+			const captured = captureHotkeyFromEvent(event);
+			if (!captured) return;
 
-		recorder.stop();
-		recorder.resetKeys();
+			const reserved = checkReserved(captured);
+			if (reserved?.severity === "error") {
+				optionsRef.current?.onReserved?.(captured, reserved);
+				return;
+			}
 
-		const reserved = checkReserved(canonical, PLATFORM);
-		if (reserved?.severity === "error") {
-			options?.onReserved?.(canonical, reserved);
-			return;
-		}
+			const conflictId = getHotkeyConflict(captured, recordingId);
+			if (conflictId) {
+				optionsRef.current?.onConflict?.(recordingId, captured, conflictId);
+				return;
+			}
 
-		const conflictId = getHotkeyConflict(canonical, recordingId);
-		if (conflictId) {
-			options?.onConflict?.(recordingId, canonical, conflictId);
-			return;
-		}
+			if (reserved?.severity === "warning") {
+				optionsRef.current?.onReserved?.(captured, reserved);
+			}
 
-		if (reserved?.severity === "warning") {
-			options?.onReserved?.(canonical, reserved);
-		}
+			const defaultKey = HOTKEYS[recordingId].key;
+			if (captured === defaultKey) {
+				resetOverride(recordingId);
+			} else {
+				setOverride(recordingId, captured);
+			}
+			optionsRef.current?.onSave?.(recordingId, captured);
+		};
 
-		const defaultKey = HOTKEYS[recordingId].key;
-		if (canonical === defaultKey) {
-			resetOverride(recordingId);
-		} else {
-			setOverride(recordingId, canonical);
-		}
-		options?.onSave?.(recordingId, canonical);
-	}, [keys, recorder, recordingId, setOverride, resetOverride, options]);
+		window.addEventListener("keydown", handler, { capture: true });
+		return () =>
+			window.removeEventListener("keydown", handler, { capture: true });
+	}, [recordingId, setOverride, resetOverride]);
 
-	return { isRecording: recorder.isRecording };
+	return { isRecording: !!recordingId };
 }

@@ -29,13 +29,21 @@ export const PLATFORM: Platform = detectPlatform();
 export const HOTKEYS_REGISTRY = {
 	// Navigation
 	NAVIGATE_BACK: {
-		key: { mac: "meta+bracketleft", windows: "ctrl+shift+bracketleft", linux: "ctrl+shift+bracketleft" },
+		key: {
+			mac: "meta+bracketleft",
+			windows: "ctrl+shift+bracketleft",
+			linux: "ctrl+shift+bracketleft",
+		},
 		label: "Navigate Back",
 		category: "Navigation",
 		description: "Go back to the previous page in history",
 	},
 	NAVIGATE_FORWARD: {
-		key: { mac: "meta+bracketright", windows: "ctrl+shift+bracketright", linux: "ctrl+shift+bracketright" },
+		key: {
+			mac: "meta+bracketright",
+			windows: "ctrl+shift+bracketright",
+			linux: "ctrl+shift+bracketright",
+		},
 		label: "Navigate Forward",
 		category: "Navigation",
 		description: "Go forward to the next page in history",
@@ -547,7 +555,11 @@ export const HOTKEYS_REGISTRY = {
 		category: "Help",
 	},
 	SHOW_HOTKEYS: {
-		key: { mac: "meta+slash", windows: "ctrl+shift+slash", linux: "ctrl+shift+slash" },
+		key: {
+			mac: "meta+slash",
+			windows: "ctrl+shift+slash",
+			linux: "ctrl+shift+slash",
+		},
 		label: "Show Keyboard Shortcuts",
 		category: "Help",
 	},

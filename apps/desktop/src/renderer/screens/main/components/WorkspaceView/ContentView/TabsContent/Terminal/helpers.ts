@@ -675,7 +675,8 @@ export function setupKeyboardHandler(
 		}
 
 		// Any other ctrl/meta combo → let it bubble to document for react-hotkeys-hook
-		if (event.type === "keydown" && (event.metaKey || event.ctrlKey)) return false;
+		if (event.type === "keydown" && (event.metaKey || event.ctrlKey))
+			return false;
 
 		return true;
 	};

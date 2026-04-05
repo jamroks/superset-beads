@@ -127,6 +127,7 @@ function KeyboardShortcutsPage() {
 
 	useRecordHotkeys(recordingId, {
 		onSave: () => setRecordingId(null),
+		onCancel: () => setRecordingId(null),
 		onUnassign: () => setRecordingId(null),
 		onConflict: (targetId, keys, conflictId) => {
 			setPendingConflict({ targetId, keys, conflictId });

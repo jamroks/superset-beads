@@ -11,6 +11,8 @@ export function useHotkey(
 	options?: Options,
 ): HotkeyDisplay {
 	const keys = useBinding(id);
-	useHotkeys(keys ?? "", callback, { enableOnFormTags: true, ...options }, [keys]);
+	useHotkeys(keys ?? "", callback, { enableOnFormTags: true, ...options }, [
+		keys,
+	]);
 	return formatHotkeyDisplay(keys, PLATFORM);
 }
