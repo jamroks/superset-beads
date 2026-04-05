@@ -1,16 +1,12 @@
 import { command, string } from "@superset/cli-framework";
 import { readConfig, writeConfig, getApiUrl } from "../../../lib/config";
-import { browserAuth } from "../../../lib/auth";
+import { deviceAuth } from "../../../lib/auth";
 
 export default command({
 	description: "Authenticate with Superset",
 
 	options: {
 		apiUrl: string().env("SUPERSET_API_URL").desc("Override API URL"),
-		provider: string()
-			.enum("github", "google")
-			.default("github")
-			.desc("OAuth provider"),
 	},
 
 	run: async (opts) => {
@@ -18,17 +14,13 @@ export default command({
 		if (opts.options.apiUrl) config.apiUrl = opts.options.apiUrl;
 
 		const apiUrl = getApiUrl(config);
-		const result = await browserAuth(
-			apiUrl,
-			opts.signal,
-			opts.options.provider as "github" | "google",
-		);
+		const token = await deviceAuth(apiUrl, opts.signal);
 
-		config.auth = { accessToken: result.token };
+		config.auth = { accessToken: token };
 		writeConfig(config);
 
 		return {
-			data: { expiresAt: result.expiresAt },
+			data: { apiUrl },
 			message: "Logged in successfully.",
 		};
 	},

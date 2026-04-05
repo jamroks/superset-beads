@@ -1,94 +1,114 @@
-import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { CLIError } from "@superset/cli-framework";
 
-export type AuthResult = {
-	token: string;
-	expiresAt: string;
-	state: string;
+export type DeviceCodeResponse = {
+	deviceCode: string;
+	userCode: string;
+	verificationUri: string;
+	verificationUriComplete: string;
+	expiresIn: number;
+	interval: number;
+};
+
+export type DeviceTokenResponse = {
+	accessToken: string;
+	tokenType: string;
 };
 
 /**
- * Start a local HTTP server, open the browser for OAuth, and wait
- * for the callback with a session token.
+ * OAuth 2.0 Device Authorization Flow (RFC 8628).
  *
- * Uses the existing /api/auth/desktop/connect endpoint which supports
- * localhost callbacks for native apps.
+ * 1. Request device code from the API
+ * 2. Open browser with pre-filled code
+ * 3. Poll until user approves
+ * 4. Return the access token
  */
-export async function browserAuth(
+export async function deviceAuth(
 	apiUrl: string,
 	signal: AbortSignal,
-	provider: "github" | "google" = "github",
-): Promise<AuthResult> {
-	const state = randomBytes(32).toString("base64url");
-
-	return new Promise<AuthResult>((resolve, reject) => {
-		const server = createServer((req, res) => {
-			const url = new URL(req.url!, `http://127.0.0.1`);
-
-			if (url.pathname !== "/auth/callback") {
-				res.writeHead(404);
-				res.end("Not found");
-				return;
-			}
-
-			const token = url.searchParams.get("token");
-			const expiresAt = url.searchParams.get("expiresAt");
-			const returnedState = url.searchParams.get("state");
-
-			if (!token || !expiresAt) {
-				res.writeHead(400, { "Content-Type": "text/html" });
-				res.end("<h1>Error: missing token</h1>");
-				return;
-			}
-
-			if (returnedState !== state) {
-				res.writeHead(400, { "Content-Type": "text/html" });
-				res.end("<h1>Error: state mismatch — possible CSRF attack</h1>");
-				return;
-			}
-
-			res.writeHead(200, { "Content-Type": "text/html" });
-			res.end(
-				"<html><body style='font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1a1a2e;color:#eee'>" +
-					"<div style='text-align:center'><h1>Logged in!</h1><p>You can close this tab and return to the terminal.</p></div>" +
-					"</body></html>",
-			);
-
-			server.close();
-			resolve({ token, expiresAt, state: returnedState });
-		});
-
-		signal.addEventListener("abort", () => {
-			server.close();
-			reject(new Error("Login cancelled"));
-		});
-
-		server.listen(0, "127.0.0.1", async () => {
-			const port = (server.address() as { port: number }).port;
-			const callbackUrl = `http://127.0.0.1:${port}/auth/callback`;
-
-			// Build the auth URL using the desktop connect endpoint
-			const authUrl = new URL(`${apiUrl}/api/auth/desktop/connect`);
-			authUrl.searchParams.set("provider", provider);
-			authUrl.searchParams.set("state", state);
-			authUrl.searchParams.set("protocol", "superset-cli");
-			authUrl.searchParams.set("local_callback", callbackUrl);
-
-			// Open browser
-			const openCmd =
-				process.platform === "darwin"
-					? "open"
-					: process.platform === "win32"
-						? "start"
-						: "xdg-open";
-
-			const { exec } = await import("node:child_process");
-			exec(`${openCmd} "${authUrl.toString()}"`);
-
-			console.log("Opening browser to authenticate...");
-			console.log(
-				`If it doesn't open, visit:\n${authUrl.toString()}\n`,
-			);
-		});
+): Promise<string> {
+	// Step 1: Request device code
+	const codeRes = await fetch(`${apiUrl}/api/auth/device/code`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({}),
 	});
+
+	if (!codeRes.ok) {
+		throw new CLIError(
+			`Failed to start auth flow: ${codeRes.status}`,
+			"Is the API running?",
+		);
+	}
+
+	const codeData = (await codeRes.json()) as DeviceCodeResponse;
+
+	// Step 2: Open browser with pre-filled code
+	const verificationUrl =
+		codeData.verificationUriComplete || codeData.verificationUri;
+
+	const openCmd =
+		process.platform === "darwin"
+			? "open"
+			: process.platform === "win32"
+				? "start"
+				: "xdg-open";
+
+	const { exec } = await import("node:child_process");
+	exec(`${openCmd} "${verificationUrl}"`);
+
+	console.log("Opening browser to authorize...");
+	console.log(`If it doesn't open, visit: ${verificationUrl}`);
+	if (codeData.userCode) {
+		console.log(`Your code: ${codeData.userCode}\n`);
+	}
+
+	// Step 3: Poll for token
+	const interval = (codeData.interval || 5) * 1000;
+	const deadline = Date.now() + codeData.expiresIn * 1000;
+
+	while (Date.now() < deadline) {
+		if (signal.aborted) {
+			throw new CLIError("Login cancelled");
+		}
+
+		await sleep(interval);
+
+		const tokenRes = await fetch(`${apiUrl}/api/auth/device/token`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				deviceCode: codeData.deviceCode,
+				grantType: "urn:ietf:params:oauth:grant-type:device_code",
+			}),
+		});
+
+		if (tokenRes.ok) {
+			const tokenData = (await tokenRes.json()) as DeviceTokenResponse;
+			return tokenData.accessToken;
+		}
+
+		const error = (await tokenRes.json()) as { error?: string };
+
+		if (error.error === "authorization_pending") {
+			continue;
+		}
+		if (error.error === "slow_down") {
+			await sleep(5000); // Back off 5 more seconds
+			continue;
+		}
+		if (error.error === "access_denied") {
+			throw new CLIError("Authorization denied by user");
+		}
+		if (error.error === "expired_token") {
+			throw new CLIError("Authorization expired — please try again");
+		}
+
+		throw new CLIError(`Auth error: ${error.error ?? tokenRes.status}`);
+	}
+
+	throw new CLIError("Authorization timed out — please try again");
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
