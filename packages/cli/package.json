@@ -10,7 +10,10 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@superset/cli-framework": "workspace:*"
+		"@superset/cli-framework": "workspace:*",
+		"@superset/trpc": "workspace:*",
+		"@trpc/client": "^11.7.1",
+		"superjson": "^2.2.5"
 	},
 	"devDependencies": {
 		"@superset/typescript": "workspace:*",

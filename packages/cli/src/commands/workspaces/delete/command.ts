@@ -1,4 +1,4 @@
-import { command, string, positional } from "@superset/cli-framework";
+import { command, string, positional, CLIError } from "@superset/cli-framework";
 
 export default command({
 	description: "Delete workspaces",
@@ -7,11 +7,13 @@ export default command({
 		device: string().env("SUPERSET_DEVICE").desc("Device ID"),
 	},
 	run: async (opts) => {
-		const ids = opts.args.ids as string[];
-		// TODO: delete each workspace
-		return {
-			data: { count: ids.length },
-			message: ids.length === 1 ? `Deleted workspace ${ids[0]}` : `Deleted ${ids.length} workspaces`,
-		};
+		if (!opts.ctx.deviceId) {
+			throw new CLIError("No device found", "Use --device or run: superset devices list");
+		}
+		// TODO: route to device via websocket
+		throw new CLIError(
+			"Not implemented",
+			"Needs device command routing via websocket",
+		);
 	},
 });
