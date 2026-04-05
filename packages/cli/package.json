@@ -1,0 +1,20 @@
+{
+	"name": "@superset/cli",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"bin": {
+		"superset": "./src/bin.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@superset/cli-framework": "workspace:*"
+	},
+	"devDependencies": {
+		"@superset/typescript": "workspace:*",
+		"bun-types": "^1.2.12",
+		"typescript": "^5.9.3"
+	}
+}

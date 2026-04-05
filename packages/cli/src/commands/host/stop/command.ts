@@ -1,14 +1,9 @@
-// superset host stop
-// superset-host stop
+import { command, CLIError } from "@superset/cli-framework";
 
 export default command({
-  description: "Stop the host service daemon",
-
-  run: async () => {
-    const pid = readPidFile()
-    if (!pid) throw new CLIError("Host service is not running")
-    process.kill(pid)
-    removePidFile()
-    return { data: { pid }, message: `Host service stopped (PID ${pid})` }
-  },
-})
+	description: "Stop the host service daemon",
+	run: async () => {
+		// TODO: read PID file, kill process
+		return { message: "Not implemented yet" };
+	},
+});

@@ -75,6 +75,8 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 		const routeResult = routeCommand(root, args.filter(a => a !== "--help" && a !== "-h"), commandsDir);
 
 		if (routeResult.commandPath.length === 0) {
+			// Load child descriptions for root help (groups get theirs from meta.ts, leaf commands from command.ts)
+			await populateChildDescriptions(root, commandsDir);
 			console.log(generateRootHelp(config.name, config.version, root, globalConfigs));
 			return;
 		}
@@ -100,6 +102,8 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 			}
 			console.log(generateCommandHelp(config.name, routeResult.commandPath, node, globalConfigs));
 		} else if (node) {
+			// Load child command descriptions for group help
+			await populateChildDescriptions(node, routeResult.commandDir);
 			console.log(generateGroupHelp(config.name, routeResult.commandPath, node, globalConfigs));
 		}
 		return;
@@ -246,4 +250,18 @@ function getNode(
 		node = child;
 	}
 	return node;
+}
+
+async function populateChildDescriptions(
+	node: import("./help").CommandNode,
+	dir: string,
+): Promise<void> {
+	const { join } = await import("node:path");
+	for (const [name, child] of node.children) {
+		if (child.description) continue;
+		const cmd = await loadCommand(join(dir, name));
+		if (cmd) {
+			child.description = cmd.description;
+		}
+	}
 }

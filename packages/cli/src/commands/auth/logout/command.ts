@@ -1,12 +1,10 @@
-// superset auth logout
+import { command } from "@superset/cli-framework";
 
 export default command({
-  description: "Clear stored credentials",
+	description: "Clear stored credentials",
 
-  run: async () => {
-    const config = readConfig()
-    delete config.auth
-    writeConfig(config)
-    return { message: "Logged out." }
-  },
-})
+	run: async () => {
+		// TODO: readConfig(), delete auth, writeConfig()
+		return { message: "Logged out." };
+	},
+});

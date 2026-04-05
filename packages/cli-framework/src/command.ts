@@ -1,7 +1,7 @@
 import type { GenericBuilderInternals, TypeOf } from "./option";
 
 export type CommandResult =
-	| { data: unknown; message?: string }
+	| { data?: unknown; message?: string }
 	| unknown[]
 	| void;
 

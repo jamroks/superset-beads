@@ -1,21 +1,9 @@
-// superset host install
-// superset-host install
+import { command } from "@superset/cli-framework";
 
 export default command({
-  description: "Install host service to run on boot",
-
-  run: async () => {
-    const platform = process.platform
-    const path = installService()
-
-    return {
-      data: { platform, path },
-      message: [
-        "Installed host service",
-        `  ${platform === "darwin" ? "macOS" : "Linux"}: ${path}`,
-        "  Starts on boot, restarts on crash",
-        "  Run `superset host uninstall` to remove",
-      ].join("\n"),
-    }
-  },
-})
+	description: "Install host service to run on boot",
+	run: async () => {
+		// TODO: write launchd plist or systemd unit
+		return { message: "Not implemented yet" };
+	},
+});

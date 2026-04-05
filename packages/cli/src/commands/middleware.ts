@@ -1,9 +1,10 @@
-// Root middleware — applies to all commands unless they skip
+import { middleware, CLIError } from "@superset/cli-framework";
 
+// Root middleware — applies to all commands unless they skip
 export default middleware(async (opts) => {
-  const config = await readConfig()
-  if (!config.auth) throw new CLIError("Not logged in", "Run: superset auth login")
-  const api = createApiClient(config)
-  const deviceId = opts.options.device ?? readDeviceConfig()?.deviceId
-  return opts.next({ ctx: { api, config, deviceId } })
-})
+	// TODO: wire up readConfig(), createApiClient() from packages/cli/src/lib/
+	const config = {};
+	const api = {};
+	const deviceId = (opts.options.device as string) ?? undefined;
+	return opts.next({ ctx: { api, config, deviceId } });
+});

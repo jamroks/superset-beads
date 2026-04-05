@@ -1,18 +1,13 @@
-// superset devices list
-// superset devices list --include-offline
+import { command, boolean, table } from "@superset/cli-framework";
 
 export default command({
-  description: "List all devices in the org",
-
-  options: {
-    includeOffline: boolean().desc("Include offline devices"),
-  },
-
-  display: (data) => table(data, ["deviceName", "deviceType", "status", "lastSeen"]),
-
-  run: async (opts) => {
-    return await opts.ctx.api.device.list.query({
-      includeOffline: opts.options.includeOffline,
-    })
-  },
-})
+	description: "List all devices in the org",
+	options: {
+		includeOffline: boolean().desc("Include offline devices"),
+	},
+	display: (data) => table(data as Record<string, unknown>[], ["deviceName", "deviceType", "status", "lastSeen"]),
+	run: async (opts) => {
+		// TODO: opts.ctx.api.device.list.query()
+		return [];
+	},
+});
