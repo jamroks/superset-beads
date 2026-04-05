@@ -240,7 +240,12 @@ function KeyboardShortcutsPage() {
 											description={hotkey.description}
 											isRecording={recordingId === hotkey.id}
 											onStartRecording={() => handleStartRecording(hotkey.id)}
-											onReset={() => resetOverride(hotkey.id)}
+											onReset={() => {
+												setRecordingId((current) =>
+													current === hotkey.id ? null : current,
+												);
+												resetOverride(hotkey.id);
+											}}
 										/>
 									))}
 								</div>

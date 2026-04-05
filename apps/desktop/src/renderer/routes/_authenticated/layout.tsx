@@ -68,7 +68,9 @@ function AuthenticatedLayout() {
 
 	// One-time migration from old hotkey storage to new localStorage-based store
 	useEffect(() => {
-		migrateHotkeyOverrides();
+		void migrateHotkeyOverrides().catch((error) => {
+			console.error("[hotkeys] Migration failed:", error);
+		});
 	}, []);
 
 	// Update workspace-run pane state on terminal exit

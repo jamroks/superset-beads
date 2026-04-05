@@ -12,5 +12,5 @@ export function isTerminalReservedEvent(event: KeyboardEvent): boolean {
 	if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
 		return false;
 	const key = event.key.toLowerCase();
-	return TERMINAL_RESERVED.has(`ctrl+${key === "\\" ? "\\\\" : key}`);
+	return TERMINAL_RESERVED.has(`ctrl+${key}`);
 }

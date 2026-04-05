@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { type Options, useHotkeys } from "react-hotkeys-hook";
 import { formatHotkeyDisplay } from "../../display";
 import type { HotkeyId } from "../../registry";
@@ -11,8 +12,13 @@ export function useHotkey(
 	options?: Options,
 ): HotkeyDisplay {
 	const keys = useBinding(id);
-	useHotkeys(keys ?? "", callback, { enableOnFormTags: true, ...options }, [
-		keys,
-	]);
+	const callbackRef = useRef(callback);
+	callbackRef.current = callback;
+	useHotkeys(
+		keys ?? "",
+		(e, _h) => callbackRef.current(e),
+		{ enableOnFormTags: true, ...options },
+		[keys],
+	);
 	return formatHotkeyDisplay(keys, PLATFORM);
 }

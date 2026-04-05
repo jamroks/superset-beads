@@ -104,7 +104,7 @@ export function useRecordHotkeys(
 			}
 
 			if (event.key === "Backspace" || event.key === "Delete") {
-				resetOverride(recordingId);
+				setOverride(recordingId, null);
 				optionsRef.current?.onUnassign?.(recordingId);
 				return;
 			}
