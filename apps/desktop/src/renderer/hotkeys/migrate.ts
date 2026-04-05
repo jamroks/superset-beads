@@ -15,13 +15,19 @@ const PLATFORM_MAP = {
 } as const;
 
 export async function migrateHotkeyOverrides(): Promise<void> {
-	if (localStorage.getItem("hotkey-overrides")) return;
+	if (localStorage.getItem("hotkey-overrides")) {
+		console.log("[hotkeys] Migration skipped — new store already exists");
+		return;
+	}
 
 	try {
 		const oldState = await electronTrpcClient.uiState.hotkeys.get.query();
 		const oldPlatformKey = PLATFORM_MAP[PLATFORM];
 		const oldOverrides = oldState?.byPlatform?.[oldPlatformKey];
-		if (!oldOverrides || Object.keys(oldOverrides).length === 0) return;
+		if (!oldOverrides || Object.keys(oldOverrides).length === 0) {
+			console.log("[hotkeys] Migration skipped — no old overrides found");
+			return;
+		}
 
 		localStorage.setItem(
 			"hotkey-overrides",
@@ -30,7 +36,7 @@ export async function migrateHotkeyOverrides(): Promise<void> {
 		console.log(
 			`[hotkeys] Migrated ${Object.keys(oldOverrides).length} override(s)`,
 		);
-	} catch {
-		// Old endpoint gone or failed — start fresh
+	} catch (error) {
+		console.log("[hotkeys] Migration failed, starting fresh:", error);
 	}
 }
