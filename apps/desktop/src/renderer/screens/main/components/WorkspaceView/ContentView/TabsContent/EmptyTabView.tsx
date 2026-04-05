@@ -9,7 +9,7 @@ import { getAppOption } from "renderer/components/OpenInExternalDropdown";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useWorkspaceDeleteHandler } from "renderer/react-query/workspaces";
 import { DeleteWorkspaceDialog } from "renderer/screens/main/components/WorkspaceSidebar/WorkspaceListItem/components/DeleteWorkspaceDialog/DeleteWorkspaceDialog";
-import { useHotkeyDisplay } from "renderer/stores/hotkeys";
+import { useHotkeyDisplay } from "renderer/hotkeys";
 import { useTabsStore } from "renderer/stores/tabs/store";
 import { useTabsWithPresets } from "renderer/stores/tabs/useTabsWithPresets";
 import { useTheme } from "renderer/stores/theme";
@@ -49,11 +49,11 @@ export function EmptyTabView({
 	const { showDeleteDialog, setShowDeleteDialog, handleDeleteClick } =
 		useWorkspaceDeleteHandler();
 
-	const newGroupDisplay = useHotkeyDisplay("NEW_GROUP");
-	const newChatDisplay = useHotkeyDisplay("NEW_CHAT");
-	const quickOpenDisplay = useHotkeyDisplay("QUICK_OPEN");
-	const newBrowserDisplay = useHotkeyDisplay("NEW_BROWSER");
-	const openInAppDisplay = useHotkeyDisplay("OPEN_IN_APP");
+	const { keys: newGroupDisplay } = useHotkeyDisplay("NEW_GROUP");
+	const { keys: newChatDisplay } = useHotkeyDisplay("NEW_CHAT");
+	const { keys: quickOpenDisplay } = useHotkeyDisplay("QUICK_OPEN");
+	const { keys: newBrowserDisplay } = useHotkeyDisplay("NEW_BROWSER");
+	const { keys: openInAppDisplay } = useHotkeyDisplay("OPEN_IN_APP");
 	const resolvedExternalApp: ExternalApp = defaultExternalApp ?? "cursor";
 
 	const handleShowTerminal = useCallback(() => {

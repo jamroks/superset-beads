@@ -17,7 +17,7 @@ import {
 } from "react-icons/hi2";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useWorkspaceRunCommand } from "renderer/routes/_authenticated/_dashboard/workspace/$workspaceId/hooks/useWorkspaceRunCommand";
-import { useHotkeyText } from "renderer/stores/hotkeys";
+import { useHotkeyDisplay } from "renderer/hotkeys";
 import { useSetSettingsSearchQuery } from "renderer/stores/settings-state";
 
 interface WorkspaceRunButtonProps {
@@ -33,7 +33,7 @@ export const WorkspaceRunButton = memo(function WorkspaceRunButton({
 }: WorkspaceRunButtonProps) {
 	const navigate = useNavigate();
 	const setSettingsSearchQuery = useSetSettingsSearchQuery();
-	const hotkeyText = useHotkeyText("RUN_WORKSPACE_COMMAND");
+	const hotkeyText = useHotkeyDisplay("RUN_WORKSPACE_COMMAND").text;
 	const {
 		canForceStop,
 		forceStopWorkspaceRun,

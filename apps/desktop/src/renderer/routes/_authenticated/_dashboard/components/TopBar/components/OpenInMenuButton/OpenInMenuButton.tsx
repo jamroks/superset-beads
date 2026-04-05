@@ -10,14 +10,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { memo, useCallback, useMemo } from "react";
 import { HiChevronDown } from "react-icons/hi2";
-import { HotkeyTooltipContent } from "renderer/components/HotkeyTooltipContent";
 import {
 	getAppOption,
 	OpenInExternalDropdownItems,
 } from "renderer/components/OpenInExternalDropdown";
+import { HotkeyLabel, useHotkey, useHotkeyDisplay } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useThemeStore } from "renderer/stores";
-import { useHotkey, useHotkeyDisplay } from "renderer/hotkeys";
 
 interface OpenInMenuButtonProps {
 	worktreePath: string;
@@ -124,9 +123,9 @@ export const OpenInMenuButton = memo(function OpenInMenuButton({
 				</TooltipTrigger>
 				<TooltipContent side="bottom" sideOffset={6}>
 					{currentApp ? (
-						<HotkeyTooltipContent
+						<HotkeyLabel
 							label={`Open in ${currentApp.displayLabel ?? currentApp.label}`}
-							hotkeyId="OPEN_IN_APP"
+							id="OPEN_IN_APP"
 						/>
 					) : (
 						"Select an editor from the dropdown"
