@@ -68,7 +68,8 @@ export function OrganizationSettings({
 	const { data: activeOrg } = authClient.useActiveOrganization();
 	const currentUserId = session?.user?.id;
 	const currentMember = activeOrg?.members?.find(
-		(m) => m.userId === currentUserId,
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Better Auth 1.5.6 generic inference doesn't propagate through useActiveOrganization
+		(m: any) => m.userId === currentUserId,
 	);
 	const isOwner = currentMember?.role === "owner";
 

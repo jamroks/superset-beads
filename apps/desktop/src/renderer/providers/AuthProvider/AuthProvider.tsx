@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		const refreshJwt = () =>
 			authClient
 				.token()
-				.then((res) => {
+				.then((res: { data?: { token?: string } | null }) => {
 					if (res.data?.token) {
 						setJwt(res.data.token);
 					}
