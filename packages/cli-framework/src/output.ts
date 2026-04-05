@@ -85,7 +85,10 @@ export function table(
 
 	// Calculate column widths (capped by terminal width heuristic)
 	const widths = hdrs.map((h, i) =>
-		Math.min(maxColWidth, Math.max(h.length, ...rows.map((r) => r[i]?.length))),
+		Math.min(
+			maxColWidth,
+			Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0)),
+		),
 	);
 
 	// Render

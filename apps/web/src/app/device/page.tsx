@@ -2,11 +2,25 @@
 
 import { authClient } from "@superset/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 
 type Org = { id: string; name: string };
 
 export default function DeviceAuthPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+					<p className="text-muted-foreground">Loading...</p>
+				</div>
+			}
+		>
+			<DeviceAuthContent />
+		</Suspense>
+	);
+}
+
+function DeviceAuthContent() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
 	const userCodeParam = searchParams.get("user_code");
@@ -39,7 +53,10 @@ export default function DeviceAuthPage() {
 
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				setError((data as any).message ?? "Invalid or expired code");
+				setError(
+					(data as Record<string, unknown>).message ??
+						"Invalid or expired code",
+				);
 				setStatus("error");
 				return;
 			}
@@ -61,14 +78,15 @@ export default function DeviceAuthPage() {
 
 			// Fetch user's organizations
 			authClient.organization.list().then(({ data }) => {
-				const orgList = (data ?? []).map((m: any) => ({
+				const orgList = (data ?? []).map((m: { id: string; name: string }) => ({
 					id: m.id,
 					name: m.name,
 				}));
 				setOrgs(orgList);
 
 				// Default to active org or first org
-				const activeOrgId = (session.session as any).activeOrganizationId;
+				const activeOrgId = (session.session as Record<string, unknown>)
+					.activeOrganizationId as string | undefined;
 				setSelectedOrgId(activeOrgId ?? orgList[0]?.id ?? "");
 			});
 
@@ -109,7 +127,9 @@ export default function DeviceAuthPage() {
 
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
-				setError((data as any).message ?? "Failed to approve");
+				setError(
+					(data as Record<string, unknown>).message ?? "Failed to approve",
+				);
 				setStatus("error");
 				return;
 			}

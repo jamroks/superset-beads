@@ -34,7 +34,7 @@ export function BillingOverview({ visibleItems }: BillingOverviewProps) {
 	const { data: activeOrg } = authClient.useActiveOrganization();
 	const currentUserId = session?.user?.id;
 	const currentMember = activeOrg?.members?.find(
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Better Auth 1.5.6 generic inference gap
+		// biome-ignore lint/suspicious/noExplicitAny: Better Auth 1.5.6 generic inference gap
 		(m: any) => m.userId === currentUserId,
 	);
 	const isOwner = currentMember?.role === "owner";
