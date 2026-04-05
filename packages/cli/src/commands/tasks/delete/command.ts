@@ -1,4 +1,4 @@
-import { command, positional, CLIError } from "@superset/cli-framework";
+import { CLIError, command, positional } from "@superset/cli-framework";
 import type { ApiClient } from "../../../lib/api-client";
 
 export default command({

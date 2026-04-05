@@ -1,4 +1,4 @@
 export default {
-  description: "Manage workspaces",
-  aliases: ["ws"],
-}
+	description: "Manage workspaces",
+	aliases: ["ws"],
+};

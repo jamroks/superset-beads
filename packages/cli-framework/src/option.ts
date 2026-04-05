@@ -40,7 +40,9 @@ export class OptionBuilderBase<
 
 	constructor(config?: TBuilderConfig) {
 		this._ = {
-			config: config ?? ({ aliases: [], type: "string" } as unknown as TBuilderConfig),
+			config:
+				config ??
+				({ aliases: [], type: "string" } as unknown as TBuilderConfig),
 			$output: undefined as any as TOutput,
 		};
 	}
@@ -87,21 +89,9 @@ export class OptionBuilderBase<
 		OptionBuilderBase<
 			BuilderConfig<"boolean">,
 			boolean | undefined,
-			| TOmit
-			| OptionType
-			| "min"
-			| "max"
-			| "enum"
-			| "int"
-			| "variadic"
+			TOmit | OptionType | "min" | "max" | "enum" | "int" | "variadic"
 		>,
-		| TOmit
-		| OptionType
-		| "min"
-		| "max"
-		| "enum"
-		| "int"
-		| "variadic"
+		TOmit | OptionType | "min" | "max" | "enum" | "int" | "variadic"
 	> {
 		return new OptionBuilderBase({
 			...this._.config,
@@ -234,10 +224,7 @@ export class OptionBuilderBase<
 		OptionBuilderBase<TBuilderConfig, TOutput, TOmit | "min", TEnums>,
 		TOmit | "min"
 	> {
-		if (
-			this._.config.maxVal !== undefined &&
-			this._.config.maxVal < value
-		) {
+		if (this._.config.maxVal !== undefined && this._.config.maxVal < value) {
 			throw new CLIError("Min value cannot be higher than max value");
 		}
 		return new OptionBuilderBase({
@@ -252,10 +239,7 @@ export class OptionBuilderBase<
 		OptionBuilderBase<TBuilderConfig, TOutput, TOmit | "max", TEnums>,
 		TOmit | "max"
 	> {
-		if (
-			this._.config.minVal !== undefined &&
-			this._.config.minVal > value
-		) {
+		if (this._.config.minVal !== undefined && this._.config.minVal > value) {
 			throw new CLIError("Max value cannot be lower than min value");
 		}
 		return new OptionBuilderBase({
@@ -326,11 +310,10 @@ export type GenericBuilderInternals = {
 	};
 };
 
-export type TypeOf<
-	TOptions extends Record<string, GenericBuilderInternals>,
-> = Simplify<{
-	[K in keyof TOptions]: TOptions[K]["_"]["$output"];
-}>;
+export type TypeOf<TOptions extends Record<string, GenericBuilderInternals>> =
+	Simplify<{
+		[K in keyof TOptions]: TOptions[K]["_"]["$output"];
+	}>;
 
 export type Simplify<T> = {
 	[K in keyof T]: T[K];

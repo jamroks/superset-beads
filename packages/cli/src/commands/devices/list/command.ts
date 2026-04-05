@@ -1,4 +1,4 @@
-import { command, boolean, table, CLIError } from "@superset/cli-framework";
+import { boolean, CLIError, command, table } from "@superset/cli-framework";
 
 export default command({
 	description: "List all devices in the org",

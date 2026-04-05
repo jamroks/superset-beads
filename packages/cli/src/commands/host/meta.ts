@@ -1,4 +1,4 @@
 export default {
-  description: "Manage host service",
-  standalone: true,
-}
+	description: "Manage host service",
+	standalone: true,
+};

@@ -42,10 +42,18 @@ export function parseArgv(
 
 	for (const [key, config] of Object.entries(allConfigs)) {
 		if (config.type === "positional") continue;
-		const flag = config.name.startsWith("-") ? config.name : (config.name.length > 1 ? `--${config.name}` : `-${config.name}`);
+		const flag = config.name.startsWith("-")
+			? config.name
+			: config.name.length > 1
+				? `--${config.name}`
+				: `-${config.name}`;
 		optionsByFlag.set(flag, [key, config]);
 		for (const alias of config.aliases) {
-			const aliasFlag = alias.startsWith("-") ? alias : (alias.length > 1 ? `--${alias}` : `-${alias}`);
+			const aliasFlag = alias.startsWith("-")
+				? alias
+				: alias.length > 1
+					? `--${alias}`
+					: `-${alias}`;
 			optionsByFlag.set(aliasFlag, [key, config]);
 		}
 	}
@@ -145,7 +153,11 @@ export function parseArgv(
 	for (const [key, config] of Object.entries(allConfigs)) {
 		if (options[key] !== undefined) continue;
 		if (config.envVar && process.env[config.envVar] !== undefined) {
-			options[key] = coerce(config, process.env[config.envVar]!, `$${config.envVar}`);
+			options[key] = coerce(
+				config,
+				process.env[config.envVar]!,
+				`$${config.envVar}`,
+			);
 		}
 	}
 
@@ -160,7 +172,9 @@ export function parseArgv(
 	for (const [key, config] of Object.entries(allConfigs)) {
 		if (config.type === "positional") continue;
 		if (config.isRequired && options[key] === undefined) {
-			const flag = config.name.startsWith("-") ? config.name : `--${config.name}`;
+			const flag = config.name.startsWith("-")
+				? config.name
+				: `--${config.name}`;
 			throw new CLIError(`Missing required option: ${flag}`);
 		}
 	}
@@ -170,10 +184,14 @@ export function parseArgv(
 		if (!config.conflictsWith || options[key] === undefined) continue;
 		for (const conflictKey of config.conflictsWith) {
 			if (options[conflictKey] !== undefined) {
-				const flag1 = config.name.startsWith("-") ? config.name : `--${config.name}`;
+				const flag1 = config.name.startsWith("-")
+					? config.name
+					: `--${config.name}`;
 				const conflictConfig = allConfigs[conflictKey];
 				const flag2 = conflictConfig
-					? (conflictConfig.name.startsWith("-") ? conflictConfig.name : `--${conflictConfig.name}`)
+					? conflictConfig.name.startsWith("-")
+						? conflictConfig.name
+						: `--${conflictConfig.name}`
 					: `--${conflictKey}`;
 				throw new CLIError(
 					`Options ${flag1} and ${flag2} cannot be used together`,

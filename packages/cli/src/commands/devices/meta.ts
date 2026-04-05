@@ -1,3 +1,3 @@
 export default {
-  description: "List devices",
-}
+	description: "List devices",
+};

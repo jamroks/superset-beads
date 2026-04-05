@@ -1,6 +1,6 @@
-import { middleware, CLIError } from "@superset/cli-framework";
-import { readConfig, readDeviceConfig } from "../lib/config";
+import { CLIError, middleware } from "@superset/cli-framework";
 import { createApiClient } from "../lib/api-client";
+import { readConfig, readDeviceConfig } from "../lib/config";
 
 export default middleware(async (opts) => {
 	const config = readConfig();

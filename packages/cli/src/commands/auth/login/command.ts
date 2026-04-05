@@ -1,8 +1,8 @@
-import { command, string } from "@superset/cli-framework";
 import * as p from "@clack/prompts";
-import { readConfig, writeConfig, getApiUrl } from "../../../lib/config";
+import { command, string } from "@superset/cli-framework";
 import { createApiClient } from "../../../lib/api-client";
 import { deviceAuth } from "../../../lib/auth";
+import { getApiUrl, readConfig, writeConfig } from "../../../lib/config";
 
 export default command({
 	description: "Authenticate with Superset",

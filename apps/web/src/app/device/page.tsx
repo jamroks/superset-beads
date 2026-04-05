@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { authClient } from "@superset/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 type Org = { id: string; name: string };
 
@@ -13,11 +13,43 @@ export default function DeviceAuthPage() {
 
 	const [userCode, setUserCode] = useState(userCodeParam ?? "");
 	const [status, setStatus] = useState<
-		"loading" | "idle" | "verifying" | "approving" | "approved" | "denied" | "error"
+		| "loading"
+		| "idle"
+		| "verifying"
+		| "approving"
+		| "approved"
+		| "denied"
+		| "error"
 	>("loading");
 	const [error, setError] = useState<string | null>(null);
 	const [orgs, setOrgs] = useState<Org[]>([]);
 	const [selectedOrgId, setSelectedOrgId] = useState<string>("");
+
+	const verifyCode = useCallback(async (code: string) => {
+		const cleaned = code.replace(/[-\s]/g, "").toUpperCase();
+		if (!cleaned) return;
+
+		setStatus("verifying");
+		setError(null);
+
+		try {
+			const res = await fetch(
+				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device?user_code=${encodeURIComponent(cleaned)}`,
+			);
+
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				setError((data as any).message ?? "Invalid or expired code");
+				setStatus("error");
+				return;
+			}
+
+			setStatus("approving");
+		} catch {
+			setError("Failed to verify code");
+			setStatus("error");
+		}
+	}, []);
 
 	useEffect(() => {
 		authClient.getSession().then(({ data: session }) => {
@@ -46,33 +78,7 @@ export default function DeviceAuthPage() {
 				verifyCode(userCodeParam);
 			}
 		});
-	}, []);
-
-	const verifyCode = async (code: string) => {
-		const cleaned = code.replace(/[-\s]/g, "").toUpperCase();
-		if (!cleaned) return;
-
-		setStatus("verifying");
-		setError(null);
-
-		try {
-			const res = await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device?user_code=${encodeURIComponent(cleaned)}`,
-			);
-
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				setError((data as any).message ?? "Invalid or expired code");
-				setStatus("error");
-				return;
-			}
-
-			setStatus("approving");
-		} catch {
-			setError("Failed to verify code");
-			setStatus("error");
-		}
-	};
+	}, [router, userCodeParam, verifyCode]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -118,15 +124,12 @@ export default function DeviceAuthPage() {
 	const handleDeny = async () => {
 		const code = userCode.replace(/[-\s]/g, "").toUpperCase();
 		try {
-			await fetch(
-				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device/deny`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					credentials: "include",
-					body: JSON.stringify({ userCode: code }),
-				},
-			);
+			await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device/deny`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ userCode: code }),
+			});
 			setStatus("denied");
 		} catch {
 			setStatus("denied");
@@ -167,7 +170,6 @@ export default function DeviceAuthPage() {
 								onChange={(e) => setUserCode(e.target.value)}
 								placeholder="ABCD-EFGH"
 								className="mt-1 block w-full rounded-md border border-border bg-background px-4 py-3 text-center font-mono text-2xl tracking-widest placeholder:text-muted-foreground/40 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-								autoFocus
 								autoComplete="off"
 							/>
 						</div>

@@ -1,4 +1,4 @@
 export default {
-  description: "Manage tasks",
-  aliases: ["t"],
-}
+	description: "Manage tasks",
+	aliases: ["t"],
+};

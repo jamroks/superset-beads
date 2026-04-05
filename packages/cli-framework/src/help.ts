@@ -28,14 +28,20 @@ export function generateRootHelp(
 			.filter(([, node]) => node.children.size > 0 || node.hasCommand)
 			.sort(([a], [b]) => a.localeCompare(b));
 
-		const maxLen = Math.max(...entries.map(([name]) => {
-			const node = root.children.get(name)!;
-			const aliasStr = node.aliases?.length ? ` (${node.aliases.join(", ")})` : "";
-			return name.length + aliasStr.length;
-		}));
+		const maxLen = Math.max(
+			...entries.map(([name]) => {
+				const node = root.children.get(name)!;
+				const aliasStr = node.aliases?.length
+					? ` (${node.aliases.join(", ")})`
+					: "";
+				return name.length + aliasStr.length;
+			}),
+		);
 
 		for (const [cmdName, node] of entries) {
-			const aliasStr = node.aliases?.length ? ` (${node.aliases.join(", ")})` : "";
+			const aliasStr = node.aliases?.length
+				? ` (${node.aliases.join(", ")})`
+				: "";
 			const label = `${cmdName}${aliasStr}`.padEnd(maxLen + 2);
 			lines.push(`  ${label}${node.description ?? ""}`);
 		}
@@ -58,7 +64,7 @@ export function generateGroupHelp(
 	name: string,
 	path: string[],
 	node: CommandNode,
-	globals?: Record<string, ProcessedBuilderConfig>,
+	_globals?: Record<string, ProcessedBuilderConfig>,
 ): string {
 	const lines: string[] = [];
 	const fullPath = [name, ...path].join(" ");
@@ -78,9 +84,7 @@ export function generateGroupHelp(
 		const maxLen = Math.max(...entries.map(([n]) => n.length));
 
 		for (const [cmdName, child] of entries) {
-			lines.push(
-				`  ${cmdName.padEnd(maxLen + 2)}${child.description ?? ""}`,
-			);
+			lines.push(`  ${cmdName.padEnd(maxLen + 2)}${child.description ?? ""}`);
 		}
 		lines.push("");
 	}
@@ -92,7 +96,7 @@ export function generateCommandHelp(
 	name: string,
 	path: string[],
 	node: CommandNode,
-	globals?: Record<string, ProcessedBuilderConfig>,
+	_globals?: Record<string, ProcessedBuilderConfig>,
 ): string {
 	const lines: string[] = [];
 	const fullPath = [name, ...path].join(" ");
@@ -155,7 +159,7 @@ function formatOptions(
 
 	if (entries.length === 0) return lines;
 
-	const formatted = entries.map(([key, config]) => {
+	const formatted = entries.map(([_key, config]) => {
 		const flag = config.name.startsWith("-") ? config.name : `--${config.name}`;
 		const aliasStr = config.aliases.length
 			? `${config.aliases.map((a) => (a.startsWith("-") ? a : `-${a}`)).join(", ")}, `
@@ -174,7 +178,8 @@ function formatOptions(
 
 		const parts: string[] = [];
 		if (config.description) parts.push(config.description);
-		if (config.default !== undefined) parts.push(`(default: ${config.default})`);
+		if (config.default !== undefined)
+			parts.push(`(default: ${config.default})`);
 		if (config.envVar) parts.push(`[$${config.envVar}]`);
 
 		return { label, desc: parts.join(" ") };

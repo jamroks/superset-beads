@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { cli, string, boolean } from "@superset/cli-framework";
 import { existsSync } from "node:fs";
+import { boolean, cli, string } from "@superset/cli-framework";
 
 // Detect if we're running from source (dev) or compiled binary
 const commandsDir = new URL("./commands", import.meta.url).pathname;

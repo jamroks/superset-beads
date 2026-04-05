@@ -1,9 +1,9 @@
-import { readdirSync, existsSync } from "node:fs";
-import { join, basename } from "node:path";
-import { skip, type MiddlewareExport, type MiddlewareFn } from "./middleware";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { CommandConfig } from "./command";
+import { CLIError, suggestSimilar } from "./errors";
 import type { CommandNode } from "./help";
-import { suggestSimilar, CLIError } from "./errors";
+import { type MiddlewareExport, type MiddlewareFn, skip } from "./middleware";
 
 export type RouteMatch = {
 	commandPath: string[];

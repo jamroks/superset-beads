@@ -1,4 +1,4 @@
-import { command, CLIError } from "@superset/cli-framework";
+import { command } from "@superset/cli-framework";
 
 export default command({
 	description: "Stop the host service daemon",

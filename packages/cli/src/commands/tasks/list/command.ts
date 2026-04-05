@@ -1,4 +1,10 @@
-import { command, string, number, boolean, table } from "@superset/cli-framework";
+import {
+	boolean,
+	command,
+	number,
+	string,
+	table,
+} from "@superset/cli-framework";
 import type { ApiClient } from "../../../lib/api-client";
 
 export default command({

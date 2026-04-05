@@ -1,6 +1,6 @@
-import { command, CLIError } from "@superset/cli-framework";
-import { readConfig } from "../../../lib/config";
+import { CLIError, command } from "@superset/cli-framework";
 import { createApiClient } from "../../../lib/api-client";
+import { readConfig } from "../../../lib/config";
 
 export default command({
 	description: "Show current user and organization",

@@ -31,19 +31,11 @@ export function formatOutput(
 	return JSON.stringify(data, null, 2);
 }
 
-function isResultWithData(
-	result: unknown,
-): result is { data: unknown } {
-	return (
-		typeof result === "object" &&
-		result !== null &&
-		"data" in result
-	);
+function isResultWithData(result: unknown): result is { data: unknown } {
+	return typeof result === "object" && result !== null && "data" in result;
 }
 
-function isResultWithMessage(
-	result: unknown,
-): result is { message: string } {
+function isResultWithMessage(result: unknown): result is { message: string } {
 	return (
 		typeof result === "object" &&
 		result !== null &&
@@ -93,13 +85,11 @@ export function table(
 
 	// Calculate column widths (capped by terminal width heuristic)
 	const widths = hdrs.map((h, i) =>
-		Math.min(maxColWidth, Math.max(h.length, ...rows.map((r) => r[i]!.length))),
+		Math.min(maxColWidth, Math.max(h.length, ...rows.map((r) => r[i]?.length))),
 	);
 
 	// Render
-	const headerLine = hdrs
-		.map((h, i) => h.padEnd(widths[i]!))
-		.join("  ");
+	const headerLine = hdrs.map((h, i) => h.padEnd(widths[i]!)).join("  ");
 	const bodyLines = rows.map((r) =>
 		r.map((cell, i) => cell.padEnd(widths[i]!)).join("  "),
 	);
@@ -107,10 +97,7 @@ export function table(
 	return [headerLine, ...bodyLines].join("\n");
 }
 
-function getNestedValue(
-	obj: Record<string, unknown>,
-	path: string,
-): unknown {
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 	return path.split(".").reduce<unknown>((acc, key) => {
 		if (typeof acc === "object" && acc !== null && key in acc) {
 			return (acc as Record<string, unknown>)[key];

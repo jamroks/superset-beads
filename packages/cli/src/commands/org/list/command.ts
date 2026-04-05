@@ -5,11 +5,11 @@ export default command({
 	description: "List organizations you belong to",
 
 	display: (data) =>
-		table(data as Record<string, unknown>[], ["name", "slug", "active"], [
-			"NAME",
-			"SLUG",
-			"ACTIVE",
-		]),
+		table(
+			data as Record<string, unknown>[],
+			["name", "slug", "active"],
+			["NAME", "SLUG", "ACTIVE"],
+		),
 
 	run: async (opts) => {
 		const api = opts.ctx.api as ApiClient;

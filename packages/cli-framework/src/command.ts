@@ -3,13 +3,10 @@ import type { GenericBuilderInternals, TypeOf } from "./option";
 export type CommandResult =
 	| { data?: unknown; message?: string }
 	| unknown[]
-	| void;
+	| undefined;
 
 export type CommandConfig<
-	TOpts extends Record<string, GenericBuilderInternals> = Record<
-		string,
-		never
-	>,
+	TOpts extends Record<string, GenericBuilderInternals> = Record<string, never>,
 	TArgs extends GenericBuilderInternals[] = [],
 > = {
 	description: string;
@@ -28,12 +25,16 @@ export type CommandConfig<
 type InferArgs<T extends GenericBuilderInternals[]> = T extends []
 	? Record<string, never>
 	: {
-			[K in keyof T]: T[K] extends GenericBuilderInternals
-				? { name: string; value: T[K]["_"]["$output"] }
-				: never;
-		} extends infer Mapped
+				[K in keyof T]: T[K] extends GenericBuilderInternals
+					? { name: string; value: T[K]["_"]["$output"] }
+					: never;
+			} extends infer Mapped
 		? Mapped extends { name: string; value: unknown }[]
-			? { [Item in Mapped[number] as Item extends { name: string } ? NonNullable<Item["name"]> : never]: Item["value"] }
+			? {
+					[Item in Mapped[number] as Item extends { name: string }
+						? NonNullable<Item["name"]>
+						: never]: Item["value"];
+				}
 			: Record<string, never>
 		: Record<string, never>;
 

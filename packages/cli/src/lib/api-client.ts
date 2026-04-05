@@ -1,8 +1,8 @@
 import type { AppRouter } from "@superset/trpc";
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { TRPCClient } from "@trpc/client";
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import SuperJSON from "superjson";
-import { type SupersetConfig, getApiUrl } from "./config";
+import { getApiUrl, type SupersetConfig } from "./config";
 
 export type ApiClient = TRPCClient<AppRouter>;
 

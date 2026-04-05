@@ -1,19 +1,18 @@
-import type { GenericBuilderInternals, ProcessedBuilderConfig } from "./option";
-import type { CommandConfig } from "./command";
 import { CLIError } from "./errors";
-import { parseArgv, isAgentMode, camelToKebab } from "./parser";
-import { formatOutput } from "./output";
 import {
-	scanCommands,
-	routeCommand,
+	generateCommandHelp,
+	generateGroupHelp,
+	generateRootHelp,
+} from "./help";
+import type { GenericBuilderInternals, ProcessedBuilderConfig } from "./option";
+import { formatOutput } from "./output";
+import { camelToKebab, isAgentMode, parseArgv } from "./parser";
+import {
 	loadCommand,
 	resolveMiddleware,
+	routeCommand,
+	scanCommands,
 } from "./router";
-import {
-	generateRootHelp,
-	generateGroupHelp,
-	generateCommandHelp,
-} from "./help";
 
 export type CLIConfig = {
 	name: string;
@@ -46,8 +45,7 @@ export async function cli(config: CLIConfig): Promise<void> {
 				code?: string;
 				data?: { code?: string };
 			};
-			const code =
-				trpcError.data?.code ?? trpcError.code;
+			const code = trpcError.data?.code ?? trpcError.code;
 
 			if (code === "UNAUTHORIZED") {
 				process.stderr.write(
@@ -55,7 +53,10 @@ export async function cli(config: CLIConfig): Promise<void> {
 				);
 			} else if (code === "NOT_FOUND") {
 				process.stderr.write(`Error: Not found\n`);
-			} else if (code === "FETCH_ERROR" || error.message.includes("fetch failed")) {
+			} else if (
+				code === "FETCH_ERROR" ||
+				error.message.includes("fetch failed")
+			) {
 				process.stderr.write(
 					"Error: Could not connect to API\nHint: Is the API running?\n",
 				);
@@ -92,12 +93,18 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 	// Quick check for --help with no command
 	if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
 		// Check if there's a command path first
-		const routeResult = routeCommand(root, args.filter(a => a !== "--help" && a !== "-h"), commandsDir);
+		const routeResult = routeCommand(
+			root,
+			args.filter((a) => a !== "--help" && a !== "-h"),
+			commandsDir,
+		);
 
 		if (routeResult.commandPath.length === 0) {
 			// Load child descriptions for root help (groups get theirs from meta.ts, leaf commands from command.ts)
 			await populateChildDescriptions(root, commandsDir);
-			console.log(generateRootHelp(config.name, config.version, root, globalConfigs));
+			console.log(
+				generateRootHelp(config.name, config.version, root, globalConfigs),
+			);
 			return;
 		}
 
@@ -121,11 +128,25 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 					return { ...cfg, name: cfg.name ?? "arg" };
 				});
 			}
-			console.log(generateCommandHelp(config.name, routeResult.commandPath, node, globalConfigs));
+			console.log(
+				generateCommandHelp(
+					config.name,
+					routeResult.commandPath,
+					node,
+					globalConfigs,
+				),
+			);
 		} else if (node) {
 			// Load child command descriptions for group help
 			await populateChildDescriptions(node, routeResult.commandDir);
-			console.log(generateGroupHelp(config.name, routeResult.commandPath, node, globalConfigs));
+			console.log(
+				generateGroupHelp(
+					config.name,
+					routeResult.commandPath,
+					node,
+					globalConfigs,
+				),
+			);
 		}
 		return;
 	}
@@ -137,10 +158,16 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 	}
 
 	// Route to command
-	const { commandPath, commandDir, remainingArgs } = routeCommand(root, args, commandsDir);
+	const { commandPath, commandDir, remainingArgs } = routeCommand(
+		root,
+		args,
+		commandsDir,
+	);
 
 	if (commandPath.length === 0) {
-		console.log(generateRootHelp(config.name, config.version, root, globalConfigs));
+		console.log(
+			generateRootHelp(config.name, config.version, root, globalConfigs),
+		);
 		return;
 	}
 
@@ -151,7 +178,9 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 		// It's a group, not a leaf command — show group help
 		const node = getNode(root, commandPath);
 		if (node) {
-			console.log(generateGroupHelp(config.name, commandPath, node, globalConfigs));
+			console.log(
+				generateGroupHelp(config.name, commandPath, node, globalConfigs),
+			);
 		}
 		return;
 	}
@@ -184,7 +213,9 @@ async function run(config: CLIConfig, signal: AbortSignal): Promise<void> {
 					return { ...cfg, name: cfg.name ?? "arg" };
 				});
 			}
-			console.log(generateCommandHelp(config.name, commandPath, node, globalConfigs));
+			console.log(
+				generateCommandHelp(config.name, commandPath, node, globalConfigs),
+			);
 		}
 		return;
 	}

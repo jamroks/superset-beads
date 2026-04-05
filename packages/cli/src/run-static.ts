@@ -1,19 +1,22 @@
+import type {
+	GenericBuilderInternals,
+	ProcessedBuilderConfig,
+} from "@superset/cli-framework";
 import {
-	string,
 	boolean,
-	CLIError,
 	buildStaticTree,
-	routeCommand,
-	resolveStaticMiddleware,
-	generateRootHelp,
-	generateGroupHelp,
-	generateCommandHelp,
-	parseArgv,
-	isAgentMode,
+	CLIError,
 	camelToKebab,
 	formatOutput,
+	generateCommandHelp,
+	generateGroupHelp,
+	generateRootHelp,
+	isAgentMode,
+	parseArgv,
+	resolveStaticMiddleware,
+	routeCommand,
+	string,
 } from "@superset/cli-framework";
-import type { GenericBuilderInternals, ProcessedBuilderConfig } from "@superset/cli-framework";
 import { commands, groups, middlewareMap } from "./commands";
 
 const NAME = "superset";
@@ -40,10 +43,17 @@ export async function runStatic(): Promise<void> {
 			process.exit(1);
 		}
 		if (error instanceof Error) {
-			if ((error as any).data?.code === "UNAUTHORIZED" || (error as any).code === "UNAUTHORIZED") {
-				process.stderr.write("Error: Session expired\nHint: Run: superset auth login\n");
+			if (
+				(error as any).data?.code === "UNAUTHORIZED" ||
+				(error as any).code === "UNAUTHORIZED"
+			) {
+				process.stderr.write(
+					"Error: Session expired\nHint: Run: superset auth login\n",
+				);
 			} else if (error.message.includes("fetch failed")) {
-				process.stderr.write("Error: Could not connect to API\nHint: Is the API running?\n");
+				process.stderr.write(
+					"Error: Could not connect to API\nHint: Is the API running?\n",
+				);
 			} else {
 				process.stderr.write(`Error: ${error.message}\n`);
 			}
@@ -66,10 +76,14 @@ async function execute(signal: AbortSignal): Promise<void> {
 		globalConfigs[key] = { ...cfg, name: cfg.name ?? camelToKebab(key) };
 	}
 
-	const { root, middlewares, commandMap } = buildStaticTree(groups, commands, middlewareMap);
+	const { root, middlewares, commandMap } = buildStaticTree(
+		groups,
+		commands,
+		middlewareMap,
+	);
 
 	// Help with no command
-	if (args.length === 0 || (args.includes("--help") || args.includes("-h"))) {
+	if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
 		const cleanArgs = args.filter((a) => a !== "--help" && a !== "-h");
 		const routeResult = routeCommand(root, cleanArgs, "");
 
@@ -97,9 +111,13 @@ async function execute(signal: AbortSignal): Promise<void> {
 					name: b._.config.name ?? "arg",
 				}));
 			}
-			console.log(generateCommandHelp(NAME, routeResult.commandPath, node, globalConfigs));
+			console.log(
+				generateCommandHelp(NAME, routeResult.commandPath, node, globalConfigs),
+			);
 		} else if (node) {
-			console.log(generateGroupHelp(NAME, routeResult.commandPath, node, globalConfigs));
+			console.log(
+				generateGroupHelp(NAME, routeResult.commandPath, node, globalConfigs),
+			);
 		}
 		return;
 	}
@@ -121,7 +139,8 @@ async function execute(signal: AbortSignal): Promise<void> {
 
 	if (!cmd) {
 		const node = getNode(root, commandPath);
-		if (node) console.log(generateGroupHelp(NAME, commandPath, node, globalConfigs));
+		if (node)
+			console.log(generateGroupHelp(NAME, commandPath, node, globalConfigs));
 		return;
 	}
 
@@ -133,7 +152,11 @@ async function execute(signal: AbortSignal): Promise<void> {
 		}
 	}
 
-	const parsed = parseArgv(["", "", ...remainingArgs], optionConfigs, globalConfigs);
+	const parsed = parseArgv(
+		["", "", ...remainingArgs],
+		optionConfigs,
+		globalConfigs,
+	);
 
 	if (parsed.options._help) {
 		const node = getNode(root, commandPath);
@@ -154,13 +177,18 @@ async function execute(signal: AbortSignal): Promise<void> {
 	// Positional args
 	const argsResult: Record<string, unknown> = {};
 	if (cmd.args) {
-		const positionalConfigs = (cmd.args as GenericBuilderInternals[]).map((b) => b._.config);
+		const positionalConfigs = (cmd.args as GenericBuilderInternals[]).map(
+			(b) => b._.config,
+		);
 		let posIdx = 0;
 		for (const posConfig of positionalConfigs) {
 			const argName = posConfig.name ?? `arg${posIdx}`;
 			if (posConfig.isVariadic) {
 				argsResult[argName] = parsed.positionals.slice(posIdx);
-				if (posConfig.isRequired && (argsResult[argName] as string[]).length === 0) {
+				if (
+					posConfig.isRequired &&
+					(argsResult[argName] as string[]).length === 0
+				) {
 					throw new CLIError(`Missing required argument: <${argName}...>`);
 				}
 				break;
@@ -201,7 +229,10 @@ async function execute(signal: AbortSignal): Promise<void> {
 	});
 
 	if (result !== undefined) {
-		const output = formatOutput(result, cmd.display, { json: isJson, quiet: isQuiet });
+		const output = formatOutput(result, cmd.display, {
+			json: isJson,
+			quiet: isQuiet,
+		});
 		if (output) console.log(output);
 	}
 }

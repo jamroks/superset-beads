@@ -2,6 +2,7 @@
 // The file-based router scans at dev time, but bun --compile
 // needs static imports.
 
+import { skip } from "@superset/cli-framework";
 import authLoginCmd from "./auth/login/command";
 import authLogoutCmd from "./auth/logout/command";
 import authWhoamiCmd from "./auth/whoami/command";
@@ -10,6 +11,7 @@ import hostInstallCmd from "./host/install/command";
 import hostStartCmd from "./host/start/command";
 import hostStatusCmd from "./host/status/command";
 import hostStopCmd from "./host/stop/command";
+import rootMiddleware from "./middleware";
 import orgListCmd from "./org/list/command";
 import orgSwitchCmd from "./org/switch/command";
 import tasksCreateCmd from "./tasks/create/command";
@@ -20,9 +22,6 @@ import tasksUpdateCmd from "./tasks/update/command";
 import workspacesCreateCmd from "./workspaces/create/command";
 import workspacesDeleteCmd from "./workspaces/delete/command";
 import workspacesListCmd from "./workspaces/list/command";
-
-import rootMiddleware from "./middleware";
-import { skip } from "@superset/cli-framework";
 
 export type CommandEntry = {
 	path: string[];

@@ -1,9 +1,9 @@
 "use client";
 
+import { apiKeyClient } from "@better-auth/api-key/client";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import type { auth } from "@superset/auth/server";
-import { apiKeyClient } from "@better-auth/api-key/client";
 import {
 	customSessionClient,
 	organizationClient,

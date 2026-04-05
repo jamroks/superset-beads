@@ -1,4 +1,4 @@
-import { command, string, positional, CLIError } from "@superset/cli-framework";
+import { CLIError, command, positional, string } from "@superset/cli-framework";
 
 export default command({
 	description: "Delete workspaces",
@@ -8,7 +8,10 @@ export default command({
 	},
 	run: async (opts) => {
 		if (!opts.ctx.deviceId) {
-			throw new CLIError("No device found", "Use --device or run: superset devices list");
+			throw new CLIError(
+				"No device found",
+				"Use --device or run: superset devices list",
+			);
 		}
 		// TODO: route to device via websocket
 		throw new CLIError(

@@ -1,7 +1,7 @@
-import { command, positional, CLIError } from "@superset/cli-framework";
 import * as p from "@clack/prompts";
+import { CLIError, command, positional } from "@superset/cli-framework";
 import type { ApiClient } from "../../../lib/api-client";
-import { readConfig, getApiUrl } from "../../../lib/config";
+import { getApiUrl, readConfig } from "../../../lib/config";
 
 export default command({
 	description: "Switch active organization",
@@ -60,17 +60,14 @@ export default command({
 		// Set active org via Better Auth
 		const config = readConfig();
 		const apiUrl = getApiUrl(config);
-		const res = await fetch(
-			`${apiUrl}/api/auth/organization/set-active`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${config.auth?.accessToken}`,
-				},
-				body: JSON.stringify({ organizationId: org.id }),
+		const res = await fetch(`${apiUrl}/api/auth/organization/set-active`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${config.auth?.accessToken}`,
 			},
-		);
+			body: JSON.stringify({ organizationId: org.id }),
+		});
 
 		if (!res.ok) {
 			throw new CLIError(`Failed to switch organization: ${res.status}`);
