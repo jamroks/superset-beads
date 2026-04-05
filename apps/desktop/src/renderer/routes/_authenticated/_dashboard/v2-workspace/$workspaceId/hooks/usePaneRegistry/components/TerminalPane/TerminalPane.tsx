@@ -2,8 +2,11 @@ import { Button } from "@superset/ui/button";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import { debounce } from "lodash";
 import { useEffect, useRef, useState } from "react";
 import { useWorkspaceWsUrl } from "../../../../../providers/WorkspaceTrpcProvider/WorkspaceTrpcProvider";
+
+const RESIZE_DEBOUNCE_MS = 150;
 
 interface WorkspaceTerminalProps {
 	workspaceId: string;
@@ -74,10 +77,22 @@ export function TerminalPane({ workspaceId }: WorkspaceTerminalProps) {
 			);
 		};
 
-		const resizeObserver = new ResizeObserver(() => {
-			fitAddon.fit();
-			sendResize();
-		});
+		const isRenderable = () => {
+			const rect = container.getBoundingClientRect();
+			return rect.width > 1 && rect.height > 1;
+		};
+
+		const handleResize = debounce(
+			() => {
+				if (!isRenderable()) return;
+				fitAddon.fit();
+				sendResize();
+			},
+			RESIZE_DEBOUNCE_MS,
+			{ leading: true, trailing: true },
+		);
+
+		const resizeObserver = new ResizeObserver(handleResize);
 		resizeObserver.observe(container);
 
 		const onTerminalDataDispose = terminal.onData((data) => {
@@ -132,6 +147,7 @@ export function TerminalPane({ workspaceId }: WorkspaceTerminalProps) {
 
 		return () => {
 			resizeObserver.disconnect();
+			handleResize.cancel();
 			onTerminalDataDispose.dispose();
 			socket.close();
 			terminal.dispose();
@@ -161,7 +177,7 @@ export function TerminalPane({ workspaceId }: WorkspaceTerminalProps) {
 			</div>
 			<div
 				ref={containerRef}
-				className="h-[360px] overflow-hidden rounded-md border border-border bg-[#14100f] p-2"
+				className="size-full overflow-hidden rounded-md border border-border p-2"
 			/>
 		</div>
 	);
