@@ -95,9 +95,7 @@ export async function buildBranch(
 			await git.raw(["config", `branch.${name}.merge`]).catch(() => "")
 		).trim();
 		upstream =
-			remote && merge
-				? `${remote}/${merge.replace("refs/heads/", "")}`
-				: null;
+			remote && merge ? `${remote}/${merge.replace("refs/heads/", "")}` : null;
 	} catch {
 		upstream = null;
 	}
@@ -119,9 +117,7 @@ export async function buildBranch(
 	}
 
 	try {
-		const log = (
-			await git.raw(["log", "-1", "--format=%H\t%aI", name])
-		).trim();
+		const log = (await git.raw(["log", "-1", "--format=%H\t%aI", name])).trim();
 		const [hash, date] = log.split("\t");
 		lastCommitHash = hash ?? "";
 		lastCommitDate = date ?? "";

@@ -9,6 +9,7 @@ import type {
 	CheckConclusionState,
 	CheckRun,
 	CheckStatusState,
+	Commit,
 	IssueComment,
 	MergeableState,
 	PullRequestReviewDecision,
@@ -24,8 +25,8 @@ import {
 } from "./utils/git-helpers";
 import {
 	type GraphQLThreadsResult,
-	REVIEW_THREADS_QUERY,
 	parseGraphQLThreads,
+	REVIEW_THREADS_QUERY,
 } from "./utils/graphql";
 import { resolveWorktreePath } from "./utils/resolve-worktree";
 
@@ -93,10 +94,7 @@ export const gitRouter = router({
 				git.status(),
 			]);
 
-			const againstBase = await getChangedFilesForDiff(git, [
-				baseRef,
-				"HEAD",
-			]);
+			const againstBase = await getChangedFilesForDiff(git, [baseRef, "HEAD"]);
 
 			// Staged — use status.files index character for correct status
 			const stagedNumstat = parseNumstat(
@@ -148,6 +146,99 @@ export const gitRouter = router({
 			}
 
 			return { currentBranch, defaultBranch, againstBase, staged, unstaged };
+		}),
+
+	listCommits: protectedProcedure
+		.input(
+			z.object({
+				workspaceId: z.string(),
+				baseBranch: z.string().optional(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const worktreePath = resolveWorktreePath(ctx, input.workspaceId);
+			const git = await ctx.git(worktreePath);
+
+			const defaultBranchName =
+				input.baseBranch ?? (await getDefaultBranchName(git));
+			const baseRef = defaultBranchName
+				? `origin/${defaultBranchName}`
+				: "HEAD";
+
+			const commits: Commit[] = [];
+			try {
+				const raw = await git.raw([
+					"log",
+					`${baseRef}..HEAD`,
+					"--format=%H\t%h\t%s\t%an\t%aI",
+				]);
+				for (const line of raw.trim().split("\n")) {
+					if (!line) continue;
+					const [hash, shortHash, message, author, date] = line.split("\t");
+					commits.push({
+						hash: hash ?? "",
+						shortHash: shortHash ?? "",
+						message: message ?? "",
+						author: author ?? "",
+						date: date ?? "",
+					});
+				}
+			} catch {}
+
+			return { commits };
+		}),
+
+	getCommitFiles: protectedProcedure
+		.input(
+			z.object({
+				workspaceId: z.string(),
+				commitHash: z.string(),
+				fromHash: z.string().optional(),
+			}),
+		)
+		.query(async ({ ctx, input }) => {
+			const worktreePath = resolveWorktreePath(ctx, input.workspaceId);
+			const git = await ctx.git(worktreePath);
+
+			const from = input.fromHash ? input.fromHash : `${input.commitHash}^`;
+			const files = await getChangedFilesForDiff(git, [from, input.commitHash]);
+
+			return { files };
+		}),
+
+	renameBranch: protectedProcedure
+		.input(
+			z.object({
+				workspaceId: z.string(),
+				oldName: z.string(),
+				newName: z.string(),
+			}),
+		)
+		.mutation(async ({ ctx, input }) => {
+			const worktreePath = resolveWorktreePath(ctx, input.workspaceId);
+			const git = await ctx.git(worktreePath);
+
+			// Check if branch has been pushed to remote
+			try {
+				const remote = await git.raw([
+					"ls-remote",
+					"--heads",
+					"origin",
+					input.oldName,
+				]);
+				if (remote.trim()) {
+					throw new TRPCError({
+						code: "PRECONDITION_FAILED",
+						message: "Cannot rename a branch that has been pushed to remote",
+					});
+				}
+			} catch (error) {
+				if (error instanceof TRPCError) throw error;
+				// ls-remote failed — probably no remote, safe to rename
+			}
+
+			await git.raw(["branch", "-m", input.oldName, input.newName]);
+			return { name: input.newName };
 		}),
 
 	getDiff: protectedProcedure
@@ -233,10 +324,8 @@ export const gitRouter = router({
 					checks = parsed.map(
 						(c: Record<string, unknown>): CheckRun => ({
 							name: (c.name as string) ?? "",
-							status: ((c.status as string) ??
-								"completed") as CheckStatusState,
-							conclusion: (c.conclusion ??
-								null) as CheckConclusionState | null,
+							status: ((c.status as string) ?? "completed") as CheckStatusState,
+							conclusion: (c.conclusion ?? null) as CheckConclusionState | null,
 							detailsUrl: (c.url as string) ?? null,
 							startedAt: (c.startedAt as string) ?? null,
 							completedAt: (c.completedAt as string) ?? null,
@@ -256,9 +345,7 @@ export const gitRouter = router({
 					null) as PullRequestReviewDecision | null,
 				mergeable: "unknown" as MergeableState,
 				headRefName: pr.headBranch ?? "",
-				updatedAt: pr.updatedAt
-					? new Date(pr.updatedAt).toISOString()
-					: "",
+				updatedAt: pr.updatedAt ? new Date(pr.updatedAt).toISOString() : "",
 				checks,
 			};
 		}),
@@ -322,14 +409,13 @@ export const gitRouter = router({
 				let page = 1;
 				let hasMore = true;
 				while (hasMore) {
-					const { data: comments } =
-						await octokit.issues.listComments({
-							owner: project.repoOwner,
-							repo: project.repoName,
-							issue_number: pr.prNumber,
-							per_page: 100,
-							page,
-						});
+					const { data: comments } = await octokit.issues.listComments({
+						owner: project.repoOwner,
+						repo: project.repoName,
+						issue_number: pr.prNumber,
+						per_page: 100,
+						page,
+					});
 					for (const c of comments) {
 						const body = c.body?.trim();
 						if (!body) continue;

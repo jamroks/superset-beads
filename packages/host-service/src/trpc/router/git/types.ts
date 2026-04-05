@@ -119,3 +119,11 @@ export interface ChangedFile {
 	additions: number;
 	deletions: number;
 }
+
+export interface Commit {
+	hash: string;
+	shortHash: string;
+	message: string;
+	author: string;
+	date: string;
+}
