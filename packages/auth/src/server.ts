@@ -19,10 +19,11 @@ import { getTrustedVercelPreviewOrigins } from "@superset/shared/vercel-preview-
 import { Client } from "@upstash/qstash";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { apiKey } from "@better-auth/api-key";
 import {
-	apiKey,
 	bearer,
 	customSession,
+	deviceAuthorization,
 	organization,
 } from "better-auth/plugins";
 import { jwt } from "better-auth/plugins/jwt";
@@ -545,6 +546,9 @@ export const auth = betterAuth({
 					}
 				},
 			},
+		}),
+		deviceAuthorization({
+			verificationUri: `${env.NEXT_PUBLIC_WEB_URL}/device`,
 		}),
 		bearer(),
 		customSession(async ({ user, session: baseSession }) => {

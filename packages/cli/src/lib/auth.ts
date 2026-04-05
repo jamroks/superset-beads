@@ -1,33 +1,61 @@
-import { createServer, type Server } from "node:http";
+import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 
-type AuthCallbackResult = {
+export type AuthResult = {
 	token: string;
+	expiresAt: string;
+	state: string;
 };
 
-export async function waitForAuthCallback(
+/**
+ * Start a local HTTP server, open the browser for OAuth, and wait
+ * for the callback with a session token.
+ *
+ * Uses the existing /api/auth/desktop/connect endpoint which supports
+ * localhost callbacks for native apps.
+ */
+export async function browserAuth(
+	apiUrl: string,
 	signal: AbortSignal,
-): Promise<{ token: string; port: number }> {
-	return new Promise((resolve, reject) => {
+	provider: "github" | "google" = "github",
+): Promise<AuthResult> {
+	const state = randomBytes(32).toString("base64url");
+
+	return new Promise<AuthResult>((resolve, reject) => {
 		const server = createServer((req, res) => {
-			const url = new URL(req.url!, `http://localhost`);
+			const url = new URL(req.url!, `http://127.0.0.1`);
 
-			if (url.pathname === "/callback") {
-				const token = url.searchParams.get("token");
-
-				if (!token) {
-					res.writeHead(400, { "Content-Type": "text/html" });
-					res.end("<h1>Error: no token received</h1>");
-					return;
-				}
-
-				res.writeHead(200, { "Content-Type": "text/html" });
-				res.end(
-					"<h1>Logged in!</h1><p>You can close this tab and return to the terminal.</p>",
-				);
-
-				server.close();
-				resolve({ token, port: (server.address() as any).port });
+			if (url.pathname !== "/auth/callback") {
+				res.writeHead(404);
+				res.end("Not found");
+				return;
 			}
+
+			const token = url.searchParams.get("token");
+			const expiresAt = url.searchParams.get("expiresAt");
+			const returnedState = url.searchParams.get("state");
+
+			if (!token || !expiresAt) {
+				res.writeHead(400, { "Content-Type": "text/html" });
+				res.end("<h1>Error: missing token</h1>");
+				return;
+			}
+
+			if (returnedState !== state) {
+				res.writeHead(400, { "Content-Type": "text/html" });
+				res.end("<h1>Error: state mismatch — possible CSRF attack</h1>");
+				return;
+			}
+
+			res.writeHead(200, { "Content-Type": "text/html" });
+			res.end(
+				"<html><body style='font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1a1a2e;color:#eee'>" +
+					"<div style='text-align:center'><h1>Logged in!</h1><p>You can close this tab and return to the terminal.</p></div>" +
+					"</body></html>",
+			);
+
+			server.close();
+			resolve({ token, expiresAt, state: returnedState });
 		});
 
 		signal.addEventListener("abort", () => {
@@ -35,14 +63,32 @@ export async function waitForAuthCallback(
 			reject(new Error("Login cancelled"));
 		});
 
-		server.listen(0, "127.0.0.1", () => {
-			// Port 0 = OS picks a random available port
+		server.listen(0, "127.0.0.1", async () => {
+			const port = (server.address() as { port: number }).port;
+			const callbackUrl = `http://127.0.0.1:${port}/auth/callback`;
+
+			// Build the auth URL using the desktop connect endpoint
+			const authUrl = new URL(`${apiUrl}/api/auth/desktop/connect`);
+			authUrl.searchParams.set("provider", provider);
+			authUrl.searchParams.set("state", state);
+			authUrl.searchParams.set("protocol", "superset-cli");
+			authUrl.searchParams.set("local_callback", callbackUrl);
+
+			// Open browser
+			const openCmd =
+				process.platform === "darwin"
+					? "open"
+					: process.platform === "win32"
+						? "start"
+						: "xdg-open";
+
+			const { exec } = await import("node:child_process");
+			exec(`${openCmd} "${authUrl.toString()}"`);
+
+			console.log("Opening browser to authenticate...");
+			console.log(
+				`If it doesn't open, visit:\n${authUrl.toString()}\n`,
+			);
 		});
 	});
-}
-
-export function getCallbackPort(server: Server): number {
-	const addr = server.address();
-	if (typeof addr === "object" && addr) return addr.port;
-	throw new Error("Server not listening");
 }
