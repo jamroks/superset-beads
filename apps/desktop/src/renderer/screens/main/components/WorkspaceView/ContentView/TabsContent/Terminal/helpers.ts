@@ -674,24 +674,8 @@ export function setupKeyboardHandler(
 			return false;
 		}
 
-		// Any other ctrl/meta combo → dispatch synthetic event on document
-		// so react-hotkeys-hook picks it up (xterm's textarea would otherwise
-		// cause it to be ignored as a form input)
-		if (event.type === "keydown" && (event.metaKey || event.ctrlKey)) {
-			document.dispatchEvent(
-				new KeyboardEvent("keydown", {
-					key: event.key,
-					code: event.code,
-					metaKey: event.metaKey,
-					ctrlKey: event.ctrlKey,
-					altKey: event.altKey,
-					shiftKey: event.shiftKey,
-					bubbles: true,
-				}),
-			);
-			event.preventDefault();
-			return false;
-		}
+		// Any other ctrl/meta combo → let it bubble to document for react-hotkeys-hook
+		if (event.type === "keydown" && (event.metaKey || event.ctrlKey)) return false;
 
 		return true;
 	};
