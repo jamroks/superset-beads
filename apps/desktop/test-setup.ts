@@ -67,6 +67,12 @@ const mockHead = {
 	})),
 };
 
+// biome-ignore lint/suspicious/noExplicitAny: Test setup requires extending globalThis
+(globalThis as any).window = {
+	addEventListener: mock(() => {}),
+	removeEventListener: mock(() => {}),
+};
+
 // =============================================================================
 // Electron Preload Mocks (exposed via contextBridge in real app)
 // =============================================================================
