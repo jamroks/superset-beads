@@ -10,7 +10,7 @@ import {
 } from "@superset/ui/dialog";
 import { ScrollArea } from "@superset/ui/scroll-area";
 import type { inferRouterOutputs } from "@trpc/server";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CommitRow } from "../CommitRow";
 
 type Commit =
@@ -31,6 +31,14 @@ export function RangeModal({
 }: RangeModalProps) {
 	const [fromIdx, setFromIdx] = useState<number | null>(null);
 	const [toIdx, setToIdx] = useState<number | null>(null);
+
+	// Reset selection when modal opens/closes
+	useEffect(() => {
+		if (!open) {
+			setFromIdx(null);
+			setToIdx(null);
+		}
+	}, [open]);
 
 	const handleClick = (idx: number) => {
 		if (fromIdx === null) {

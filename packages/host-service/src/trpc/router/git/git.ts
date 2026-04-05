@@ -275,8 +275,10 @@ export const gitRouter = router({
 					modifiedContent = await git.show([`:0:${input.path}`]);
 				} catch {}
 			} else {
+				// Unstaged: compare index (staged version) against working tree
+				// If file isn't in index (untracked), originalContent stays empty = "new file"
 				try {
-					originalContent = await git.show([`HEAD:${input.path}`]);
+					originalContent = await git.show([`:0:${input.path}`]);
 				} catch {}
 				try {
 					modifiedContent = await readFile(
@@ -402,7 +404,12 @@ export const gitRouter = router({
 					},
 				);
 				reviewThreads = parseGraphQLThreads(result);
-			} catch {}
+			} catch (error) {
+				console.warn(
+					"[git.getPullRequestThreads] Failed to fetch review threads:",
+					error,
+				);
+			}
 
 			const conversationComments: IssueComment[] = [];
 			try {
@@ -433,7 +440,12 @@ export const gitRouter = router({
 					hasMore = comments.length === 100;
 					page++;
 				}
-			} catch {}
+			} catch (error) {
+				console.warn(
+					"[git.getPullRequestThreads] Failed to fetch conversation comments:",
+					error,
+				);
+			}
 
 			return { reviewThreads, conversationComments };
 		}),
