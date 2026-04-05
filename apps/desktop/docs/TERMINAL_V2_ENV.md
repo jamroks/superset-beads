@@ -1,101 +1,91 @@
-# V2 Terminal Env Review
+# V2 Terminal Env Contract
 
-Last reviewed: 2026-04-04
+Last updated: 2026-04-04
 
-## Scope
+## Overview
 
-This note is about the current checked-out v2 workspace terminal only.
+V2 terminals use a defined env contract instead of raw `process.env` passthrough.
 
-Relevant files:
+The env is built by stripping Superset / Electron / host-service internals from
+the shell-derived base env, then injecting a small public terminal contract.
 
-- `apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types.ts`
-- `apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/page.tsx`
-- `apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/usePaneRegistry.tsx`
-- `apps/desktop/src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/TerminalPane/TerminalPane.tsx`
-- `packages/host-service/src/terminal/terminal.ts`
+## Implementation
 
-## Current V2
+### Host-service (runtime)
 
-Today, the checked-out v2 terminal path is still workspace-scoped, not terminal-scoped:
+`packages/host-service/src/terminal/env.ts` — `buildV2TerminalEnv()`
 
-- the pane registry renders `TerminalPane` with only `workspaceId`
-- `TerminalPane` connects to `/terminal/${workspaceId}`
-- host-service exposes `GET /terminal/:workspaceId`
-- each websocket creates a fresh PTY and closing the socket kills it
+The host-service process env already contains the user's shell-derived env
+(merged by the desktop app via `getProcessEnvWithShellPath` before spawning
+host-service). The builder:
 
-Current PTY env:
+1. Reads `process.env` and drops undefined values
+2. Strips internal vars via denylist (prefixes + exact matches)
+3. Injects the public terminal contract
 
-```ts
-{
-  ...process.env,
-  TERM: "xterm-256color",
-  COLORTERM: "truecolor",
-  HOME: process.env.HOME || homedir(),
-  PWD: workspace.worktreePath,
-}
-```
+Used by `packages/host-service/src/terminal/terminal.ts`.
 
-## Gaps
+### Desktop app (canonical contract + tests)
 
-Compared with VS Code, kitty, Ghostty, WezTerm, and other mature terminal flows, the current v2 path is missing:
+`apps/desktop/src/main/lib/terminal/env.ts` — `buildV2TerminalEnv()`
 
-- a small explicit public terminal identity surface such as `TERM_PROGRAM` and `TERM_PROGRAM_VERSION`
-- a sanitized user-shell env layer
-- a namespaced Superset metadata contract
-- terminal-scoped attach or reattach semantics
+Takes a pre-resolved `shellEnv` record (from `getShellEnvironment()`) and
+applies the same stripping + injection. This is the canonical contract
+definition with tests in `env.test.ts`.
 
-## What To Preserve
-
-User-needed env should still load by default. The practical set is:
-
-- `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`
-- locale vars like `LANG`, `LC_*`, `TZ`
-- `SSH_AUTH_SOCK`
-- proxy vars
-- version-manager and runtime vars users depend on
-- TLS and cert config
-
-This should come from the user's shell environment, then be sanitized with an allowlist before spawning the terminal.
-
-## What Not To Carry Over
-
-These should not be part of the v2 shell contract unless there is a specific v2 consumer:
-
-- `SUPERSET_PANE_ID`
-- `SUPERSET_TAB_ID`
-- `SUPERSET_PORT`
-- other localhost-hook-specific metadata from the old desktop runtime
-
-## Recommendation
-
-V2 should move toward:
-
-### Public env
+## Public terminal env
 
 ```sh
 TERM=xterm-256color
 TERM_PROGRAM=Superset
 TERM_PROGRAM_VERSION=<app version>
 COLORTERM=truecolor
-PWD=<workspace cwd>
+LANG=<utf8 locale>
+PWD=<cwd>
 ```
 
-### V2 metadata
+All other user shell env vars (PATH, HOME, SSH_AUTH_SOCK, version managers,
+proxy config, etc.) pass through from the shell-derived base env.
 
-Only if and when v2 actually uses them:
+## Stripped vars
 
-```sh
-SUPERSET_WORKSPACE_ID=<workspace id>
-SUPERSET_WORKSPACE_PATH=<workspace path>
-SUPERSET_ROOT_PATH=<root path>
-```
+### By prefix
 
-## Bottom Line
+- `ELECTRON_` — Electron runtime internals
+- `SUPERSET_` — Legacy hook metadata (v1 only)
+- `VITE_` — Build-time frontend config
+- `NEXT_PUBLIC_` — Build-time frontend config
+- `TURBO_` — Build system
+- `npm_` — npm lifecycle metadata
+- `CHROME_` — Chromium internals
 
-The current checked-out v2 terminal is still a thin prototype:
+### By exact name
 
-- workspace-scoped transport
-- raw `process.env` passthrough
-- no explicit terminal identity contract
+- `HOST_SERVICE_SECRET`, `HOST_DB_PATH`, `HOST_MIGRATIONS_PATH` — host-service config
+- `AUTH_TOKEN`, `CLOUD_API_URL` — app auth/API config
+- `ORGANIZATION_ID`, `DEVICE_CLIENT_ID`, `DEVICE_NAME` — device identity
+- `CORS_ORIGINS`, `DESKTOP_VITE_PORT` — dev server config
+- `GOOGLE_API_KEY` — Chromium API key
+- `NODE_OPTIONS`, `NODE_ENV`, `NODE_PATH` — Node/Electron runtime
+- `ORIGINAL_XDG_CURRENT_DESKTOP` — Electron internal
 
-The next step is to define a small env contract and stop relying on implicit `process.env` inheritance.
+## What is NOT in v2
+
+These v1 hook metadata vars are not injected unless a v2 feature explicitly
+needs them:
+
+- `SUPERSET_PANE_ID`
+- `SUPERSET_TAB_ID`
+- `SUPERSET_PORT`
+- `SUPERSET_ENV`
+- `SUPERSET_HOOK_VERSION`
+- `SUPERSET_WORKSPACE_NAME`
+
+## Files
+
+| File | Role |
+|------|------|
+| `packages/host-service/src/terminal/env.ts` | Runtime v2 env builder |
+| `packages/host-service/src/terminal/terminal.ts` | PTY spawn (uses builder) |
+| `apps/desktop/src/main/lib/terminal/env.ts` | Canonical contract + `buildV2TerminalEnv` |
+| `apps/desktop/src/main/lib/terminal/env.test.ts` | Tests |

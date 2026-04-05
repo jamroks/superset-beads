@@ -1,11 +1,11 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import type { NodeWebSocket } from "@hono/node-ws";
 import { eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { type IPty, spawn } from "node-pty";
 import type { HostDb } from "../db";
 import { workspaces } from "../db/schema";
+import { buildV2TerminalEnv } from "./env";
 
 interface RegisterWorkspaceTerminalRouteOptions {
 	app: Hono;
@@ -103,18 +103,16 @@ export function registerWorkspaceTerminalRoute({
 					}
 
 					try {
+						const env = buildV2TerminalEnv({
+							cwd: workspace.worktreePath,
+						});
+
 						terminal = spawn(resolveShell(), [], {
 							name: "xterm-256color",
 							cwd: workspace.worktreePath,
 							cols: 120,
 							rows: 32,
-							env: {
-								...process.env,
-								TERM: "xterm-256color",
-								COLORTERM: "truecolor",
-								HOME: process.env.HOME || homedir(),
-								PWD: workspace.worktreePath,
-							},
+							env,
 						});
 					} catch (error) {
 						sendMessage(ws, {
