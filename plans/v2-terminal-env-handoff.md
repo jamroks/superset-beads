@@ -317,69 +317,211 @@ Secondary follow-up targets:
 - `apps/desktop/src/lib/trpc/routers/terminal/terminal.ts`
 - `apps/desktop/docs/EXTERNAL_FILES.md`
 
-## Likely implementation direction
+## Implementation plan
 
-1. Add a v2-specific shell snapshot path for host-service launch.
+1. Tighten host-service spawn env in
+   `apps/desktop/src/main/lib/host-service-manager.ts`.
 
-   - start from the resolved shell env snapshot
-   - strip desktop and Electron runtime vars that host-service should not carry
-   - inject only explicit host-service runtime vars
+   Implement a new local helper:
 
-2. Add a v2 terminal env builder in `packages/host-service/src/terminal/env.ts`.
-
-   Suggested shape:
-
-   - `resolveLaunchShell(baseEnv)`
-   - `normalizeUtf8Locale(baseEnv)`
-   - `stripTerminalRuntimeEnv(baseEnv)`
-   - `buildV2TerminalEnv({ terminalId, workspaceId, workspacePath, rootPath, cwd, baseEnv, appVersion, nodeEnv, agentHookPort, agentHookVersion })`
-
-3. Update `packages/host-service/src/terminal/terminal.ts`.
-
-   - stop using `...process.env`
-   - resolve the shell from the sanitized base env
-   - build the PTY env through the new v2 builder
-   - keep `TERM=xterm-256color`
-
-4. Source explicit Superset metadata rather than relying on prefixes.
-
-   - `SUPERSET_TERMINAL_ID` comes from `terminalId`
-   - `SUPERSET_WORKSPACE_ID` comes from `workspaceId`
-   - `SUPERSET_WORKSPACE_PATH` comes from `workspace.worktreePath`
-   - `SUPERSET_ROOT_PATH` comes from the related project repo path
-   - `SUPERSET_AGENT_HOOK_PORT` comes from the desktop-provided runtime env
-   - `SUPERSET_AGENT_HOOK_VERSION` comes from a single v2 constant
-
-5. Add a v2 shell launch config helper.
-
-   Suggested shape:
-
-   - `getSupersetShellPaths({ supersetHomeDir })`
-   - `getShellBootstrapEnv({ shell, paths, baseEnv })`
-   - `getShellLaunchArgs({ shell, paths })`
-   - `resolveShellLaunchConfig({ shell, supersetHomeDir, baseEnv })`
+   - `resolveHostServiceBaseEnv(): Promise<{ env: Record<string, string>; source: "shell" | "fallback" }>`
 
    Required behavior:
 
-   - `zsh` uses `ZDOTDIR` wrapper flow
-   - `bash` uses generated rcfile
-   - `fish` uses `--init-command`
-   - unknown shells degrade gracefully to native launch
+   - first, call `getShellEnvironment()`
+   - on success, use that shell snapshot as the base env and return
+     `source: "shell"`
+   - on failure, build a fallback env from string entries in desktop
+     `process.env`, run `augmentPathForMacOS(...)`, then filter it through the
+     same safe-env allowlist currently used by desktop terminal env filtering,
+     with two adjustments:
+     - do not use blanket `SUPERSET_*` prefix passthrough
+     - keep `SUPERSET_HOME_DIR` as an explicit key
+   - return that filtered fallback with `source: "fallback"`
 
-6. Reuse the existing wrapper path conventions from desktop agent setup.
+   This fallback policy is final for v2:
 
-   - `SUPERSET_HOME_DIR/bin`
-   - `SUPERSET_HOME_DIR/zsh`
-   - `SUPERSET_HOME_DIR/bash`
+   - shell resolution failure is allowed
+   - raw `process.env` passthrough is not allowed
 
-   Desktop remains responsible for creating the wrapper files.
-   Host-service remains responsible for choosing shell args and bootstrap env
-   for PTY launch.
+2. Build the final host-service process env explicitly in
+   `apps/desktop/src/main/lib/host-service-manager.ts`.
 
-7. Keep v1 and v2 builders separate.
+   Replace the current `buildHostServiceEnv()` implementation with:
 
-   - v1 builder in desktop keeps the old desktop hook/runtime behavior
-   - v2 builder in host-service owns the new PTY contract
+   - `baseEnv` from `resolveHostServiceBaseEnv()`
+   - explicit runtime additions only
+
+   The final host-service env must contain exactly:
+
+   - all keys from `baseEnv`
+   - `ELECTRON_RUN_AS_NODE=1`
+   - `ORGANIZATION_ID`
+   - `DEVICE_CLIENT_ID`
+   - `DEVICE_NAME`
+   - `HOST_SERVICE_SECRET`
+   - `HOST_SERVICE_VERSION`
+   - `HOST_MANIFEST_DIR`
+   - `KEEP_ALIVE_AFTER_PARENT=1`
+   - `HOST_DB_PATH`
+   - `HOST_MIGRATIONS_PATH`
+   - `DESKTOP_VITE_PORT`
+   - `SUPERSET_HOME_DIR`
+   - `SUPERSET_AGENT_HOOK_PORT`
+   - `SUPERSET_AGENT_HOOK_VERSION`
+   - `AUTH_TOKEN` only when present
+   - `CLOUD_API_URL` only when present
+
+   Source of each value:
+
+   - `DESKTOP_VITE_PORT` comes from `shared/env.shared.ts`
+   - `SUPERSET_AGENT_HOOK_PORT` comes from
+     `shared/env.shared.ts` as `DESKTOP_NOTIFICATIONS_PORT`
+   - `SUPERSET_AGENT_HOOK_VERSION` comes from the existing
+     `HOOK_PROTOCOL_VERSION` constant for this change
+   - `SUPERSET_HOME_DIR` comes from the already-resolved desktop app env
+
+   Do not start from `...(process.env as Record<string, string>)`.
+
+3. Add `packages/host-service/src/terminal/env.ts` as the single source of
+   truth for v2 PTY env construction.
+
+   Required exports:
+
+   - `resolveLaunchShell(baseEnv: Record<string, string>): string`
+   - `normalizeUtf8Locale(baseEnv: Record<string, string>): string`
+   - `getSupersetShellPaths(supersetHomeDir: string): { BIN_DIR: string; ZSH_DIR: string; BASH_DIR: string }`
+   - `getShellBootstrapEnv(params): Record<string, string>`
+   - `getShellLaunchArgs(params): string[]`
+   - `stripTerminalRuntimeEnv(baseEnv: Record<string, string>): Record<string, string>`
+   - `buildV2TerminalEnv(params): Record<string, string>`
+
+4. Make `resolveLaunchShell(...)` deterministic.
+
+   Required behavior:
+
+   - on Windows: `baseEnv.COMSPEC || "cmd.exe"`
+   - on non-Windows: `baseEnv.SHELL || "/bin/sh"`
+
+   Do not default to `/bin/zsh`.
+
+5. Make shell integration deterministic in
+   `packages/host-service/src/terminal/env.ts`.
+
+   Reuse the existing desktop shell behavior exactly:
+
+   - `zsh`
+     - shell args: `["-l"]`
+     - private bootstrap env:
+       - `SUPERSET_ORIG_ZDOTDIR = baseEnv.ZDOTDIR || baseEnv.HOME || homedir()`
+       - `ZDOTDIR = <SUPERSET_HOME_DIR>/zsh`
+     - only apply this bootstrap when `<SUPERSET_HOME_DIR>/zsh/.zshrc` exists
+   - `bash`
+     - shell args: `["--rcfile", "<SUPERSET_HOME_DIR>/bash/rcfile"]`
+     - if the rcfile does not exist, fall back to `["-l"]`
+     - no bootstrap env keys
+   - `fish`
+     - shell args:
+       `["-l", "--init-command", "<existing fish init command used by desktop shell-wrappers.ts>"]`
+     - no bootstrap env keys
+   - `sh` and `ksh`
+     - shell args: `["-l"]`
+     - no bootstrap env keys
+   - all other shells
+     - shell args: `[]`
+     - no bootstrap env keys
+
+   Desktop remains responsible for creating:
+
+   - `<SUPERSET_HOME_DIR>/bin`
+   - `<SUPERSET_HOME_DIR>/zsh`
+   - `<SUPERSET_HOME_DIR>/bash`
+
+   Host-service is responsible for selecting shell args and bootstrap env.
+
+6. Make PTY env filtering deterministic in
+   `stripTerminalRuntimeEnv(...)`.
+
+   Start from a string-only snapshot of host-service `process.env`.
+
+   Remove these exact runtime keys:
+
+   - `AUTH_TOKEN`
+   - `CLOUD_API_URL`
+   - `DESKTOP_VITE_PORT`
+   - `DEVICE_CLIENT_ID`
+   - `DEVICE_NAME`
+   - `ELECTRON_RUN_AS_NODE`
+   - `HOST_DB_PATH`
+   - `HOST_MANIFEST_DIR`
+   - `HOST_MIGRATIONS_PATH`
+   - `HOST_SERVICE_SECRET`
+   - `HOST_SERVICE_VERSION`
+   - `KEEP_ALIVE_AFTER_PARENT`
+   - `ORGANIZATION_ID`
+
+   Remove these exact Node and app keys:
+
+   - `NODE_ENV`
+   - `NODE_OPTIONS`
+   - `NODE_PATH`
+
+   Remove keys with these prefixes:
+
+   - `VITE_`
+   - `NEXT_PUBLIC_`
+   - `TURBO_`
+
+   Keep these explicit Superset support keys when present:
+
+   - `SUPERSET_HOME_DIR`
+   - `SUPERSET_AGENT_HOOK_PORT`
+   - `SUPERSET_AGENT_HOOK_VERSION`
+
+   Do not preserve any other `SUPERSET_*` keys by prefix rule.
+
+7. Make PTY env construction deterministic in `buildV2TerminalEnv(...)`.
+
+   `buildV2TerminalEnv(...)` must:
+
+   - start from `stripTerminalRuntimeEnv(baseEnv)`
+   - merge private shell bootstrap env from `getShellBootstrapEnv(...)`
+   - inject or override:
+     - `TERM=xterm-256color`
+     - `TERM_PROGRAM=Superset`
+     - `TERM_PROGRAM_VERSION=<HOST_SERVICE_VERSION>`
+     - `COLORTERM=truecolor`
+     - `LANG=<normalized utf8 locale>`
+     - `PWD=<cwd>`
+     - `SUPERSET_TERMINAL_ID=<terminalId>`
+     - `SUPERSET_WORKSPACE_ID=<workspaceId>`
+     - `SUPERSET_WORKSPACE_PATH=<workspacePath>`
+     - `SUPERSET_ROOT_PATH=<rootPath or "">`
+     - `SUPERSET_ENV=<development|production>`
+     - `SUPERSET_AGENT_HOOK_PORT=<SUPERSET_AGENT_HOOK_PORT>`
+     - `SUPERSET_AGENT_HOOK_VERSION=<SUPERSET_AGENT_HOOK_VERSION>`
+
+   `SUPERSET_WORKSPACE_NAME` is not part of the v2 PTY env.
+
+8. Update `packages/host-service/src/terminal/terminal.ts`.
+
+   `createTerminalSessionInternal(...)` must:
+
+   - query the workspace as it does now
+   - query the related project to derive `rootPath`
+   - capture a string-only snapshot of host-service `process.env`
+   - resolve `shell` via `resolveLaunchShell(baseEnv)`
+   - resolve `shellArgs` via `getShellLaunchArgs(...)`
+   - build `ptyEnv` via `buildV2TerminalEnv(...)`
+   - call `spawn(shell, shellArgs, { name: "xterm-256color", cwd, cols, rows, env: ptyEnv })`
+
+   It must no longer call `spawn(resolveShell(), [], { env: { ...process.env, ... } })`.
+
+9. Keep v1 and v2 separate.
+
+   - do not make v2 call `apps/desktop/src/main/lib/terminal/env.ts`
+   - do not make v2 reuse blanket `SUPERSET_*` passthrough
+   - do not change v1 desktop terminal behavior in this change
 
 ## Acceptance criteria
 
@@ -404,35 +546,57 @@ Secondary follow-up targets:
 
 ## Tests
 
-Add or update tests for:
+Add or update tests around behavior regressions and boundary protection, not
+around every field assignment.
 
-- shell-derived user env survives into PTY env
-- host-service/app secrets do not leak into PTY env
-- desktop/Electron runtime vars do not leak into PTY env
-- `TERM_PROGRAM` and `TERM_PROGRAM_VERSION` are present
-- `SUPERSET_TERMINAL_ID` is present
-- `SUPERSET_WORKSPACE_ID` is present
-- `SUPERSET_WORKSPACE_PATH` is present
-- `SUPERSET_AGENT_HOOK_PORT` is present
-- `SUPERSET_AGENT_HOOK_VERSION` is present
-- `SUPERSET_PANE_ID` is absent
-- `SUPERSET_TAB_ID` is absent
-- `SUPERSET_PORT` is absent
-- `SUPERSET_HOOK_VERSION` is absent
-- launch shell resolution prefers the user's shell and only falls back as a
-  last resort
-- zsh launch config sets private `ZDOTDIR` bootstrap env correctly
-- bash launch config uses rcfile behavior correctly
-- fish launch config uses `--init-command` behavior correctly
-- unsupported shells fall back to native launch without crashing
+Required test coverage:
+
+- shell snapshot path
+  - when a shell-derived env contains user PATH/tooling vars that are missing
+    from app env, PTY env preserves them
+  - when shell resolution fails, fallback env is filtered and does not devolve
+    into raw `process.env`
+
+- leakage prevention
+  - app/runtime secrets do not reach PTY env
+  - host-service control vars do not reach PTY env
+  - removed legacy vars do not reach PTY env:
+    `SUPERSET_PANE_ID`, `SUPERSET_TAB_ID`, `SUPERSET_PORT`,
+    `SUPERSET_HOOK_VERSION`
+
+- retained contract behavior
+  - the minimal v2 Superset metadata needed by real consumers is present:
+    `SUPERSET_TERMINAL_ID`, `SUPERSET_WORKSPACE_ID`,
+    `SUPERSET_WORKSPACE_PATH`, `SUPERSET_AGENT_HOOK_PORT`,
+    `SUPERSET_AGENT_HOOK_VERSION`
+  - `TERM_PROGRAM=Superset` and a UTF-8 locale are present
+
+- shell launch behavior
+  - zsh launch config applies wrapper bootstrap only when wrapper files exist
+    and otherwise degrades safely
+  - bash launch config uses rcfile when present and login-shell fallback when
+    absent
+  - fish launch config uses the expected init-command path and does not crash
+  - unsupported shells launch natively without Superset-specific bootstrap
+
+- workspace-derived metadata
+  - `SUPERSET_ROOT_PATH` is populated when project data is available
+  - missing project/root metadata degrades to empty string rather than failure
+
+- one integration-level PTY spawn test
+  - host-service terminal session creation uses shell args plus built env rather
+    than `spawn(..., [], { env: { ...process.env } })`
+
+Avoid low-value tests that only restate helper internals line-by-line or assert
+every single key in isolation without covering a real regression risk.
 
 Recommended test location:
 
 - `packages/host-service/src/terminal/env.test.ts`
+- targeted integration coverage near `packages/host-service/src/terminal/terminal.ts`
 
 ## Non-goals
 
-- changing terminal transport from workspace-scoped to terminal-scoped
 - recreating the full v1 desktop hook contract unchanged
 - using env vars for dynamic runtime session state
 
