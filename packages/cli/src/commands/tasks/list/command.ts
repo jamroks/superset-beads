@@ -19,17 +19,15 @@ export default command({
 	display: (data) =>
 		table(
 			data as Record<string, unknown>[],
-			["slug", "title", "statusName", "priority", "assigneeName"],
-			["SLUG", "TITLE", "STATUS", "PRIORITY", "ASSIGNEE"],
+			["slug", "title", "priority", "assignee"],
+			["SLUG", "TITLE", "PRIORITY", "ASSIGNEE"],
 		),
 	run: async (opts) => {
 		const api = opts.ctx.api as ApiClient;
 		const result = await api.task.all.query();
-		// Flatten { task: {...}, statusName, assigneeName } → flat objects
 		return result.map((r) => ({
 			...r.task,
-			statusName: r.statusName,
-			assigneeName: r.assigneeName,
+			assignee: r.assignee?.name ?? "—",
 		}));
 	},
 });

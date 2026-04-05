@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { authClient } from "@superset/auth/client";
 import { useRouter, useSearchParams } from "next/navigation";
 
+type Org = { id: string; name: string };
+
 export default function DeviceAuthPage() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
@@ -14,8 +16,9 @@ export default function DeviceAuthPage() {
 		"loading" | "idle" | "verifying" | "approving" | "approved" | "denied" | "error"
 	>("loading");
 	const [error, setError] = useState<string | null>(null);
+	const [orgs, setOrgs] = useState<Org[]>([]);
+	const [selectedOrgId, setSelectedOrgId] = useState<string>("");
 
-	// Check if user is authenticated
 	useEffect(() => {
 		authClient.getSession().then(({ data: session }) => {
 			if (!session) {
@@ -23,9 +26,22 @@ export default function DeviceAuthPage() {
 				router.push(`/sign-in?redirect=${encodeURIComponent(returnUrl)}`);
 				return;
 			}
+
+			// Fetch user's organizations
+			authClient.organization.list().then(({ data }) => {
+				const orgList = (data ?? []).map((m: any) => ({
+					id: m.id,
+					name: m.name,
+				}));
+				setOrgs(orgList);
+
+				// Default to active org or first org
+				const activeOrgId = (session.session as any).activeOrganizationId;
+				setSelectedOrgId(activeOrgId ?? orgList[0]?.id ?? "");
+			});
+
 			setStatus(userCodeParam ? "verifying" : "idle");
 
-			// If we have a code from the URL, auto-verify it
 			if (userCodeParam) {
 				verifyCode(userCodeParam);
 			}
@@ -65,6 +81,15 @@ export default function DeviceAuthPage() {
 
 	const handleApprove = async () => {
 		const code = userCode.replace(/[-\s]/g, "").toUpperCase();
+
+		// Set the active org before approving so the session token
+		// carries the right org context
+		if (selectedOrgId) {
+			await authClient.organization.setActive({
+				organizationId: selectedOrgId,
+			});
+		}
+
 		try {
 			const res = await fetch(
 				`${process.env.NEXT_PUBLIC_API_URL}/api/auth/device/approve`,
@@ -166,6 +191,30 @@ export default function DeviceAuthPage() {
 						<p className="text-center text-sm text-muted-foreground">
 							The Superset CLI is requesting access to your account.
 						</p>
+
+						{orgs.length > 1 && (
+							<div>
+								<label
+									htmlFor="org"
+									className="block text-sm font-medium text-foreground"
+								>
+									Organization
+								</label>
+								<select
+									id="org"
+									value={selectedOrgId}
+									onChange={(e) => setSelectedOrgId(e.target.value)}
+									className="mt-1 block w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+								>
+									{orgs.map((org) => (
+										<option key={org.id} value={org.id}>
+											{org.name}
+										</option>
+									))}
+								</select>
+							</div>
+						)}
+
 						<div className="flex gap-3">
 							<button
 								type="button"
