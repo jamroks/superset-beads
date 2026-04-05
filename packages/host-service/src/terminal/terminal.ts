@@ -241,6 +241,7 @@ export function registerWorkspaceTerminalRoute({
 		const body = await c.req.json<{
 			terminalId: string;
 			workspaceId: string;
+			themeType?: string;
 		}>();
 
 		if (!body.terminalId || !body.workspaceId) {
@@ -250,6 +251,7 @@ export function registerWorkspaceTerminalRoute({
 		const result = createTerminalSessionInternal({
 			terminalId: body.terminalId,
 			workspaceId: body.workspaceId,
+			themeType: parseThemeType(body.themeType),
 			db,
 		});
 
