@@ -127,6 +127,7 @@ export const BUILTIN_TERMINAL_AGENTS = [
 		command: "copilot --allow-all",
 		promptCommand: "copilot -i --allow-all",
 		promptCommandSuffix: "--yolo",
+		promptTransport: "stdin",
 		includeInDefaultTerminalPresets: true,
 	}),
 	createBuiltinTerminalAgent({
