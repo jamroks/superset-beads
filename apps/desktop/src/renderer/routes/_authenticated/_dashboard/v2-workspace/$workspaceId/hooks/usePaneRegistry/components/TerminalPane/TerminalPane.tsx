@@ -1,6 +1,7 @@
 import type { RendererContext } from "@superset/panes";
 import "@xterm/xterm/css/xterm.css";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useHotkey } from "renderer/hotkeys";
 import {
 	type ConnectionState,
 	terminalRuntimeRegistry,
@@ -10,6 +11,7 @@ import type {
 	TerminalPaneData,
 } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { useWorkspaceWsUrl } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceTrpcProvider/WorkspaceTrpcProvider";
+import { ScrollToBottomButton } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/Terminal/ScrollToBottomButton";
 import { useTheme } from "renderer/stores/theme";
 import { resolveTerminalThemeType } from "renderer/stores/theme/utils";
 import { useTerminalAppearance } from "./hooks/useTerminalAppearance";
@@ -76,13 +78,30 @@ export function TerminalPane({ ctx, workspaceId }: TerminalPaneProps) {
 		terminalRuntimeRegistry.updateAppearance(terminalId, appearance);
 	}, [terminalId, appearance]);
 
+	useHotkey("CLEAR_TERMINAL", () => {
+		terminalRuntimeRegistry.clear(terminalId);
+	});
+
+	useHotkey("SCROLL_TO_BOTTOM", () => {
+		terminalRuntimeRegistry.scrollToBottom(terminalId);
+	});
+
+	const terminal = useMemo(
+		() => terminalRuntimeRegistry.getTerminal(terminalId),
+		// biome-ignore lint/correctness/useExhaustiveDependencies: connectionState triggers re-derive after attach
+		[terminalId],
+	);
+
 	return (
 		<div className="flex h-full w-full flex-col p-2">
-			<div
-				ref={containerRef}
-				className="min-h-0 flex-1 overflow-hidden"
-				style={{ backgroundColor: appearance.background }}
-			/>
+			<div className="relative min-h-0 flex-1 overflow-hidden">
+				<div
+					ref={containerRef}
+					className="h-full w-full"
+					style={{ backgroundColor: appearance.background }}
+				/>
+				<ScrollToBottomButton terminal={terminal} />
+			</div>
 			{connectionState === "closed" && (
 				<div className="flex items-center gap-2 border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
 					<span>Disconnected</span>
