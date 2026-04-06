@@ -50,6 +50,7 @@ import {
 	removePaneFromLayout,
 	resolveActiveTabIdForWorkspace,
 	resolveFileViewerMode,
+	resolveSetPaneStatus,
 } from "./utils";
 import { killTerminalForPane } from "./utils/terminal-cleanup";
 
@@ -1148,12 +1149,21 @@ export const useTabsStore = create<TabsStore>()(
 				setPaneStatus: (paneId, status) => {
 					const state = get();
 					const pane = state.panes[paneId];
-					if (!pane || pane.status === status) return;
+					if (!pane) return;
+
+					const resolved = resolveSetPaneStatus({
+						status,
+						paneTabId: pane.tabId,
+						tabs: state.tabs,
+						activeTabIds: state.activeTabIds,
+					});
+
+					if (pane.status === resolved) return;
 
 					set({
 						panes: {
 							...state.panes,
-							[paneId]: { ...pane, status },
+							[paneId]: { ...pane, status: resolved },
 						},
 					});
 				},

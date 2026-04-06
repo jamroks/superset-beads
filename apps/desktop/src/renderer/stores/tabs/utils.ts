@@ -17,6 +17,7 @@ import {
 	type DiffLayout,
 	type FileViewerMode,
 	type FileViewerState,
+	type PaneStatus,
 } from "shared/tabs-types";
 import type {
 	AddChatTabOptions,
@@ -928,4 +929,30 @@ export const activatePaneInWorkspace = ({
 			),
 		},
 	};
+};
+
+/**
+ * Resolve the effective status when setting a pane's status.
+ * Auto-acknowledges "review" → "idle" when the pane belongs to the
+ * currently active tab in its workspace, preventing the green indicator
+ * from appearing on a tab the user is already looking at.
+ */
+export const resolveSetPaneStatus = ({
+	status,
+	paneTabId,
+	tabs,
+	activeTabIds,
+}: {
+	status: PaneStatus;
+	paneTabId: string;
+	tabs: Array<{ id: string; workspaceId: string }>;
+	activeTabIds: Record<string, string | null>;
+}): PaneStatus => {
+	if (status !== "review") return status;
+
+	const tab = tabs.find((t) => t.id === paneTabId);
+	if (tab && activeTabIds[tab.workspaceId] === paneTabId) {
+		return acknowledgedStatus(status);
+	}
+	return status;
 };
