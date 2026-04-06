@@ -758,6 +758,7 @@ export function useTerminalLifecycle({
 		const reattachRecovery = {
 			throttleMs: 120,
 			pendingFrame: null as number | null,
+			pendingTimeout: null as ReturnType<typeof setTimeout> | null,
 			lastRunAt: 0,
 			pendingForceResize: false,
 		};
@@ -815,9 +816,14 @@ export function useTerminalLifecycle({
 				if (now - reattachRecovery.lastRunAt < reattachRecovery.throttleMs) {
 					// Schedule a retry after the remaining throttle window so the recovery
 					// is not permanently lost when focus events fire in rapid succession.
+					// Cancel any previously scheduled retry to prevent accumulation (#3208).
+					if (reattachRecovery.pendingTimeout !== null) {
+						clearTimeout(reattachRecovery.pendingTimeout);
+					}
 					const remaining =
 						reattachRecovery.throttleMs - (now - reattachRecovery.lastRunAt);
-					setTimeout(() => {
+					reattachRecovery.pendingTimeout = setTimeout(() => {
+						reattachRecovery.pendingTimeout = null;
 						if (!isUnmounted)
 							scheduleReattachRecovery(reattachRecovery.pendingForceResize);
 					}, remaining + 1);
@@ -832,6 +838,10 @@ export function useTerminalLifecycle({
 		};
 
 		const cancelReattachRecovery = () => {
+			if (reattachRecovery.pendingTimeout !== null) {
+				clearTimeout(reattachRecovery.pendingTimeout);
+				reattachRecovery.pendingTimeout = null;
+			}
 			if (reattachRecovery.pendingFrame === null) return;
 			cancelAnimationFrame(reattachRecovery.pendingFrame);
 			reattachRecovery.pendingFrame = null;
