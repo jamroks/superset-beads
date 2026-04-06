@@ -33,7 +33,10 @@ function buildBalancedTree(
 	panes: LayoutNode[],
 	direction: "horizontal" | "vertical" = "vertical",
 ): LayoutNode {
-	if (panes.length === 1) return panes[0]!;
+	if (panes.length === 1) {
+		const [single] = panes as [LayoutNode];
+		return single;
+	}
 
 	const mid = Math.ceil(panes.length / 2);
 	const nextDirection = direction === "vertical" ? "horizontal" : "vertical";

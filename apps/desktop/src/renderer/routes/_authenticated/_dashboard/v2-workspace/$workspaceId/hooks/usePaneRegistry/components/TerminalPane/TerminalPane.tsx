@@ -86,10 +86,11 @@ export function TerminalPane({ ctx, workspaceId }: TerminalPaneProps) {
 		terminalRuntimeRegistry.scrollToBottom(terminalId);
 	});
 
+	// connectionState in deps ensures terminal ref re-derives after connect/disconnect
+	// biome-ignore lint/correctness/useExhaustiveDependencies: connectionState is intentionally included to trigger re-derive
 	const terminal = useMemo(
 		() => terminalRuntimeRegistry.getTerminal(terminalId),
-		// biome-ignore lint/correctness/useExhaustiveDependencies: connectionState triggers re-derive after attach
-		[terminalId],
+		[terminalId, connectionState],
 	);
 
 	return (

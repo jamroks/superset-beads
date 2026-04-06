@@ -96,8 +96,8 @@ export function getNodeAtPath(
 	if (path.length === 0) return node;
 	if (node.type === "pane") return null;
 
-	const branch = path[0]!;
-	return getNodeAtPath(node[branch], path.slice(1));
+	const [branch, ...rest] = path as [SplitBranch, ...SplitBranch[]];
+	return getNodeAtPath(node[branch], rest);
 }
 
 export function updateAtPath(
@@ -108,10 +108,10 @@ export function updateAtPath(
 	if (path.length === 0) return updater(node);
 	if (node.type === "pane") return node;
 
-	const branch = path[0]!;
+	const [branch, ...rest] = path as [SplitBranch, ...SplitBranch[]];
 	return {
 		...node,
-		[branch]: updateAtPath(node[branch], path.slice(1), updater),
+		[branch]: updateAtPath(node[branch], rest, updater),
 	};
 }
 
