@@ -431,6 +431,10 @@ export function useTerminalLifecycle({
 
 		const handleTerminalInput = (data: string) => {
 			if (isRestoredModeRef.current || connectionErrorRef.current) return;
+			// Drop input while the terminal is restoring — the PTY session may not
+			// be attached yet and OS-buffered keyboard events (e.g. after a Mac
+			// reboot) would otherwise be sent as garbage to the backend.
+			if (!isStreamReadyRef.current) return;
 			if (isExitedRef.current) {
 				const isWorkspaceRunPane = hasPaneWorkspaceRun(paneId);
 				if (
@@ -456,6 +460,7 @@ export function useTerminalLifecycle({
 			domEvent: KeyboardEvent;
 		}) => {
 			if (isRestoredModeRef.current || connectionErrorRef.current) return;
+			if (!isStreamReadyRef.current) return;
 			const { domEvent } = event;
 			if (domEvent.key === "Enter") {
 				if (!isAlternateScreenRef.current) {
