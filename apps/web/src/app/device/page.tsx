@@ -52,11 +52,8 @@ function DeviceAuthContent() {
 			);
 
 			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				setError(
-					(data as Record<string, unknown>).message ??
-						"Invalid or expired code",
-				);
+				const data: { message?: string } = await res.json().catch(() => ({}));
+				setError(data.message ?? "Invalid or expired code");
 				setStatus("error");
 				return;
 			}
@@ -126,10 +123,8 @@ function DeviceAuthContent() {
 			);
 
 			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				setError(
-					(data as Record<string, unknown>).message ?? "Failed to approve",
-				);
+				const data: { message?: string } = await res.json().catch(() => ({}));
+				setError(data.message ?? "Failed to approve");
 				setStatus("error");
 				return;
 			}
