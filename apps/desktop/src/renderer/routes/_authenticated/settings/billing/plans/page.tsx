@@ -278,7 +278,7 @@ function PlansPage() {
 						returnUrl: env.NEXT_PUBLIC_WEB_URL,
 					},
 					{
-						onSuccess: (ctx: { data: { url?: string } }) => {
+						onSuccess: (ctx) => {
 							if (ctx.data?.url) {
 								window.open(ctx.data.url, "_blank");
 							}
@@ -318,7 +318,7 @@ function PlansPage() {
 					disableRedirect: true,
 				},
 				{
-					onSuccess: (ctx: { data: { url?: string } }) => {
+					onSuccess: (ctx) => {
 						if (ctx.data?.url) {
 							window.open(ctx.data.url, "_blank");
 						}

@@ -34,8 +34,7 @@ export function BillingOverview({ visibleItems }: BillingOverviewProps) {
 	const { data: activeOrg } = authClient.useActiveOrganization();
 	const currentUserId = session?.user?.id;
 	const currentMember = activeOrg?.members?.find(
-		// biome-ignore lint/suspicious/noExplicitAny: Better Auth 1.5.6 generic inference gap
-		(m: any) => m.userId === currentUserId,
+		(m) => m.userId === currentUserId,
 	);
 	const isOwner = currentMember?.role === "owner";
 
@@ -82,7 +81,7 @@ export function BillingOverview({ visibleItems }: BillingOverviewProps) {
 					disableRedirect: true,
 				},
 				{
-					onSuccess: (ctx: { data: { url?: string } }) => {
+					onSuccess: (ctx) => {
 						if (ctx.data?.url) {
 							window.open(ctx.data.url, "_blank");
 						}
@@ -105,7 +104,7 @@ export function BillingOverview({ visibleItems }: BillingOverviewProps) {
 					returnUrl: env.NEXT_PUBLIC_WEB_URL,
 				},
 				{
-					onSuccess: (ctx: { data: { url?: string } }) => {
+					onSuccess: (ctx) => {
 						if (ctx.data?.url) {
 							window.open(ctx.data.url, "_blank");
 						}

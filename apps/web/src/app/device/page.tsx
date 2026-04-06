@@ -75,15 +75,14 @@ function DeviceAuthContent() {
 
 			// Fetch user's organizations
 			authClient.organization.list().then(({ data }) => {
-				const orgList = (data ?? []).map((m: { id: string; name: string }) => ({
+				const orgList = (data ?? []).map((m) => ({
 					id: m.id,
 					name: m.name,
 				}));
 				setOrgs(orgList);
 
 				// Default to active org or first org
-				const activeOrgId = (session.session as Record<string, unknown>)
-					.activeOrganizationId as string | undefined;
+				const activeOrgId = session.session.activeOrganizationId;
 				setSelectedOrgId(activeOrgId ?? orgList[0]?.id ?? "");
 			});
 

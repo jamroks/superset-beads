@@ -68,8 +68,7 @@ export function OrganizationSettings({
 	const { data: activeOrg } = authClient.useActiveOrganization();
 	const currentUserId = session?.user?.id;
 	const currentMember = activeOrg?.members?.find(
-		// biome-ignore lint/suspicious/noExplicitAny: Better Auth 1.5.6 generic inference gap
-		(m: any) => m.userId === currentUserId,
+		(m) => m.userId === currentUserId,
 	);
 	const isOwner = currentMember?.role === "owner";
 
