@@ -603,6 +603,15 @@
         "typescript": "^5.9.3",
       },
     },
+    "packages/beads-provider": {
+      "name": "@superset/beads-provider",
+      "version": "1.0.0",
+      "dependencies": {
+        "@superset/task-provider": "workspace:*",
+        "@trpc/server": "*",
+        "zod": "*",
+      },
+    },
     "packages/chat": {
       "name": "@superset/chat",
       "version": "0.0.1",
@@ -823,6 +832,10 @@
         "bun-types": "^1.3.1",
         "typescript": "^5.9.3",
       },
+    },
+    "packages/task-provider": {
+      "name": "@superset/task-provider",
+      "version": "1.0.0",
     },
     "packages/trpc": {
       "name": "@superset/trpc",
@@ -2363,6 +2376,8 @@
 
     "@superset/auth": ["@superset/auth@workspace:packages/auth"],
 
+    "@superset/beads-provider": ["@superset/beads-provider@workspace:packages/beads-provider"],
+
     "@superset/chat": ["@superset/chat@workspace:packages/chat"],
 
     "@superset/cli": ["@superset/cli@workspace:packages/cli"],
@@ -2394,6 +2409,8 @@
     "@superset/panes": ["@superset/panes@workspace:packages/panes"],
 
     "@superset/shared": ["@superset/shared@workspace:packages/shared"],
+
+    "@superset/task-provider": ["@superset/task-provider@workspace:packages/task-provider"],
 
     "@superset/trpc": ["@superset/trpc@workspace:packages/trpc"],
 

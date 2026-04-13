@@ -1,3 +1,6 @@
+// ── Beads fork 001: register task providers before app starts ────────────────
+import './bootstrap'
+// ─────────────────────────────────────────────────────────────────────────────
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { settings } from "@superset/local-db";

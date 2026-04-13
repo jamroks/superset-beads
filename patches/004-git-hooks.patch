@@ -1,0 +1,50 @@
+--- a/apps/desktop/src/lib/trpc/routers/workspaces/git-operations.ts
++++ b/apps/desktop/src/lib/trpc/routers/workspaces/git-operations.ts
+@@ -1,4 +1,9 @@
+ // git-operations.ts  (upstream file — minimal patch)
++
++// ── Beads fork: import git hook runner ───────────────────────────────────
++import { runGitHook } from '../../../../lib/task-providers/registry'
++// ─────────────────────────────────────────────────────────────────────────
++
+ // ... existing imports and code
+
+ // ── In the git pull handler (find the existing pull mutation) ────────────
+ //
+ // BEFORE (existing upstream code):
+ //   await git.pull(worktreePath)
+ //   return { success: true }
+ //
+ // AFTER (patched):
++  await git.pull(worktreePath)
++  // ── Beads fork ───────────────────────────────────────────────────────────
++  await runGitHook('afterPull', worktreePath)
++  // ─────────────────────────────────────────────────────────────────────────
++  return { success: true }
+
+ // ── In the git commit handler (find the existing commit mutation) ─────────
+ //
+ // BEFORE:
+ //   await git.commit(worktreePath, message)
+ //   return { success: true }
+ //
+ // AFTER:
++  // ── Beads fork ───────────────────────────────────────────────────────────
++  await runGitHook('beforeCommit', worktreePath)
++  // ─────────────────────────────────────────────────────────────────────────
++  await git.commit(worktreePath, message)
++  return { success: true }
+
+ // ── In the workspace create handler ──────────────────────────────────────
+ //
+ // AFTER workspace worktree creation succeeds:
++  // ── Beads fork ───────────────────────────────────────────────────────────
++  await runGitHook('onWorkspaceCreate', worktreePath)
++  // ─────────────────────────────────────────────────────────────────────────
+
+ // ── In the workspace destroy handler ─────────────────────────────────────
+ //
+ // BEFORE worktree deletion:
++  // ── Beads fork ───────────────────────────────────────────────────────────
++  await runGitHook('onWorkspaceDestroy', worktreePath)
++  // ─────────────────────────────────────────────────────────────────────────

@@ -30,14 +30,18 @@
 		"format:check": "bunx @biomejs/biome@2.4.2 format .",
 		"typecheck": "turbo typecheck",
 		"ui-add": "turbo run ui-add",
-		"postinstall": "./scripts/postinstall.sh",
+		"postinstall": "./scripts/postinstall.sh && bun run scripts/apply-patches.ts",
 		"clean": "git clean -xdf node_modules",
 		"clean:workspaces": "turbo clean",
 		"release:desktop": "./apps/desktop/create-release.sh",
 		"release:canary": "./scripts/release-canary.sh",
 		"db:push": "bun run --cwd packages/db push",
 		"db:migrate": "bun run --cwd packages/db migrate",
-		"db:generate:desktop": "bun run --cwd packages/local-db generate"
+		"db:generate:desktop": "bun run --cwd packages/local-db generate",
+		"patches:apply": "bun run scripts/apply-patches.ts",
+		"patches:verify": "bun run scripts/verify-patches.ts",
+		"patches:update": "bun run scripts/update-patches.ts",
+		"sync-upstream": "bun run scripts/sync-upstream.ts"
 	},
 	"type": "module",
 	"workspaces": [

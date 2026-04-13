@@ -1,0 +1,23 @@
+--- a/apps/desktop/src/renderer/routes/_authenticated/_dashboard/tasks/components/TasksView/TasksView.tsx
++++ b/apps/desktop/src/renderer/routes/_authenticated/_dashboard/tasks/components/TasksView/TasksView.tsx
+@@ -1,4 +1,12 @@
+ // TasksView.tsx  (upstream file — minimal patch)
++
++// ── Beads fork: import provider sidebar sections ──────────────────────────
++import { ProviderSidebarSections } from '../../../../../../../lib/task-providers/ProviderSidebarSections'
++// ─────────────────────────────────────────────────────────────────────────
++
+ import { LinearTasksSection } from '../LinearView/LinearTasksSection'
+ import { GithubIssuesSection } from '../GithubView/GithubIssuesSection'
+ // ... rest of upstream imports
+@@ -20,6 +28,11 @@ export function TasksView() {
+       <LinearTasksSection />
+       <GithubIssuesSection />
++
++      {/* ── Beads fork: render registered provider sections ────────────────── */}
++      <ProviderSidebarSections />
++      {/* ─────────────────────────────────────────────────────────────────────── */}
++
+     </div>
+   )
+ }

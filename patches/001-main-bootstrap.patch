@@ -1,0 +1,11 @@
+--- a/apps/desktop/src/main/index.ts
++++ b/apps/desktop/src/main/index.ts
+@@ -1,4 +1,8 @@
+ // apps/desktop/src/main/index.ts  (upstream file — minimal patch)
++
++// ── Beads fork: register task providers before anything else ──────────────
++import './bootstrap'
++// ─────────────────────────────────────────────────────────────────────────────
++
+ import { app, BrowserWindow } from 'electron'
+ // ... rest of upstream file unchanged

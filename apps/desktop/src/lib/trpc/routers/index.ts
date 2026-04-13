@@ -1,3 +1,7 @@
+// ── Beads fork 002 ──────────────────────────────────────────────────────────
+import { getProviderRouters } from '../../../lib/task-providers/registry'
+// ─────────────────────────────────────────────────────────────────────────────
+
 import type { BrowserWindow } from "electron";
 import { router } from "..";
 import { createAnalyticsRouter } from "./analytics";
@@ -29,6 +33,9 @@ import { createWorkspacesRouter } from "./workspaces";
 
 export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
+  // ── Beads fork 002 ──────────────────────────────────────────────────────
+  ...getProviderRouters(),
+  // ───────────────────────────────────────────────────────────────────────────
 		chatRuntimeService: createChatRuntimeServiceRouter(),
 		chatService: createChatServiceRouter(),
 		analytics: createAnalyticsRouter(),

@@ -1,0 +1,23 @@
+--- a/apps/desktop/src/lib/trpc/routers/index.ts
++++ b/apps/desktop/src/lib/trpc/routers/index.ts
+@@ -1,4 +1,12 @@
+ // apps/desktop/src/lib/trpc/routers/index.ts  (upstream file — minimal patch)
++
++// ── Beads fork: import provider registry ─────────────────────────────────
++import { getProviderRouters } from '../../../lib/task-providers/registry'
++// ─────────────────────────────────────────────────────────────────────────
++
+ import { router } from '../trpc'
+ import { workspacesRouter } from './workspaces'
+ import { linearRouter } from './linear'
+@@ -10,6 +18,10 @@ export const appRouter = router({
+   workspaces: workspacesRouter,
+   linear: linearRouter,
+   github: githubRouter,
++
++  // ── Beads fork: spread provider routers ──────────────────────────────────
++  ...getProviderRouters(),
++  // ─────────────────────────────────────────────────────────────────────────
++
+   // ... rest of upstream routers unchanged
+ })

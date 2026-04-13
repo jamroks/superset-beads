@@ -1,3 +1,7 @@
+// ── Beads fork 003 ──────────────────────────────────────────────────────────
+import { ProviderSidebarSections } from '../../../../../../../lib/task-providers/ProviderSidebarSections'
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { Spinner } from "@superset/ui/spinner";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useNavigate } from "@tanstack/react-router";
@@ -168,6 +172,10 @@ export function TasksView({
 				/>
 			) : (
 				<TableContent
+
+      {/* ── Beads fork 003 ─────────────────────────────────────────────────── */}
+      <ProviderSidebarSections />
+      {/* ─────────────────────────────────────────────────────────────────────── */}
 					filterTab={currentTab}
 					searchQuery={searchQuery}
 					assigneeFilter={assigneeFilter}

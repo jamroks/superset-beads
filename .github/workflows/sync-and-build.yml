@@ -1,0 +1,245 @@
+name: Sync upstream and build
+
+# ─── Triggers ────────────────────────────────────────────────────────────────
+on:
+  # Daily check — catches upstream releases even without a webhook
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC daily (09:00 Paris time)
+
+  # Manual trigger from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'Also build the .dmg after sync'
+        type: boolean
+        default: true
+      force_build:
+        description: 'Build even if already up to date'
+        type: boolean
+        default: false
+
+  # Triggered by the release-watcher job below, or manually via API
+  repository_dispatch:
+    types: [upstream-release]
+
+# ─── Concurrency ─────────────────────────────────────────────────────────────
+concurrency:
+  group: sync-and-build
+  cancel-in-progress: false   # never cancel a running build
+
+# ─── Jobs ────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. Check whether upstream has new commits ──────────────────────────────
+  check-upstream:
+    name: Check upstream for new commits
+    runs-on: ubuntu-latest
+    outputs:
+      has_updates: ${{ steps.check.outputs.has_updates }}
+      upstream_sha: ${{ steps.check.outputs.upstream_sha }}
+      upstream_tag: ${{ steps.check.outputs.upstream_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/superset-sh/superset.git
+          git fetch upstream --tags
+
+      - name: Check for new commits
+        id: check
+        run: |
+          BEHIND=$(git rev-list HEAD..upstream/main --count)
+          SHA=$(git rev-parse upstream/main)
+          TAG=$(git describe --tags --exact-match upstream/main 2>/dev/null || echo "")
+
+          echo "behind=$BEHIND"
+          echo "upstream_sha=$SHA"
+          echo "upstream_tag=$TAG"
+
+          echo "upstream_sha=$SHA"   >> $GITHUB_OUTPUT
+          echo "upstream_tag=$TAG"   >> $GITHUB_OUTPUT
+
+          if [ "$BEHIND" -gt "0" ] || [ "${{ inputs.force_build }}" = "true" ]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "🔄 $BEHIND new upstream commit(s) — will sync"
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "✅ Already up to date"
+          fi
+
+  # ── 2. Sync and build (macOS required for .dmg) ────────────────────────────
+  sync-and-build:
+    name: Sync upstream + build .dmg
+    needs: check-upstream
+    if: |
+      needs.check-upstream.outputs.has_updates == 'true' ||
+      inputs.force_build == true ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.email "sync-bot@users.noreply.github.com"
+          git config user.name  "sync-bot"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/superset-sh/superset.git
+          git fetch upstream --tags
+
+      - name: Merge upstream/main
+        id: merge
+        run: |
+          BEHIND=$(git rev-list HEAD..upstream/main --count)
+          SHA=${{ needs.check-upstream.outputs.upstream_sha }}
+
+          if [ "$BEHIND" -gt "0" ]; then
+            git merge upstream/main \
+              --no-edit \
+              -m "chore: sync upstream ${SHA:0:12} [skip ci]"
+            echo "merged=true" >> $GITHUB_OUTPUT
+            echo "✓ Merged $BEHIND upstream commit(s)"
+          else
+            echo "merged=false" >> $GITHUB_OUTPUT
+            echo "✓ Nothing to merge"
+          fi
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.6'
+
+      - name: Install dependencies (runs patch-package via postinstall)
+        run: bun install
+
+      - name: Verify patches applied cleanly
+        run: bun run scripts/verify-patches.ts
+
+      - name: Type-check
+        run: bun run typecheck
+        # If this fails, upstream changed types — fix in packages/beads-provider
+
+      - name: Build desktop app
+        run: bun run build:desktop
+        env:
+          # Apple code signing (required for notarization)
+          # Add these secrets in GitHub repo Settings → Secrets
+          APPLE_ID:                   ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID:              ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK:                   ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD:           ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Find .dmg artifacts
+        id: dmg
+        run: |
+          DMG=$(find dist -name "*.dmg" | head -1)
+          echo "dmg_path=$DMG" >> $GITHUB_OUTPUT
+          echo "Found: $DMG"
+
+      - name: Upload .dmg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Superset-beads-${{ needs.check-upstream.outputs.upstream_sha && needs.check-upstream.outputs.upstream_sha[:8] || github.sha }}
+          path: dist/*.dmg
+          retention-days: 30
+
+      - name: Push merged fork to origin
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin main
+
+      - name: Create GitHub release
+        if: needs.check-upstream.outputs.upstream_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beads-${{ needs.check-upstream.outputs.upstream_tag }}
+          name: "Superset + Beads — ${{ needs.check-upstream.outputs.upstream_tag }}"
+          body: |
+            Automated build tracking upstream release ${{ needs.check-upstream.outputs.upstream_tag }}.
+
+            Includes:
+            - All upstream changes from superset-sh/superset@${{ needs.check-upstream.outputs.upstream_sha }}
+            - @superset/beads-provider — beads_rust (br) task integration
+
+            ### Install
+            Download the .dmg below and open it.
+
+            ### beads_rust
+            Install `br` if you haven't already:
+            ```bash
+            curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/beads_rust/main/install.sh" | bash
+            ```
+          files: dist/*.dmg
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## ✅ Build complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Upstream SHA | \`${{ needs.check-upstream.outputs.upstream_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Upstream tag | \`${{ needs.check-upstream.outputs.upstream_tag || 'none' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| DMG | \`${{ steps.dmg.outputs.dmg_path }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ── 3. Notify on patch failure ─────────────────────────────────────────────
+  notify-patch-failure:
+    name: Notify on patch/type failure
+    needs: sync-and-build
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Sync failed — patches or types need updating`
+            const body = `
+            The automated upstream sync failed.
+
+            **Likely cause:** upstream changed a file that one of your patches targets,
+            or changed TypeScript types that \`@superset/beads-provider\` depends on.
+
+            **Run ID:** ${{ github.run_id }}
+
+            **To fix:**
+            1. \`git fetch upstream && git merge upstream/main\`
+            2. Resolve any conflicts manually
+            3. If a patch failed: \`bun run scripts/update-patches.ts\`
+            4. If types broke: fix in \`packages/beads-provider/src/\`
+            5. \`bun run scripts/verify-patches.ts\`
+            6. Commit and push
+
+            [View failed run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `
+
+            // Check if a similar issue is already open
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'sync-failure',
+            })
+
+            if (existing.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['sync-failure'],
+              })
+            }
