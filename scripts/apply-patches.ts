@@ -144,42 +144,34 @@ const INJECTIONS: Injection[] = [
           "// ─────────────────────────────────────────────────────────────────────────────\n",
       );
 
-      // Step 2: inject <ProviderSidebarSections /> after the closing /> of TableContent.
-      // Exact anchor: onSelectionChange={handleSelectionChange} is unique to TableContent.
-      // We find it with indexOf (no regex), then find the next /> and insert after it.
+      // Step 2: rewrite the final ternary branch:
+      //   ) : ( <TableContent ... /> )}
+      // into:
+      //   ) : ( <> <TableContent ... /> <ProviderSidebarSections /> </> )}
+      //
+      // Anchored on BoardContent → TableContent sequence so it never hits
+      // the wrong ternary. Whitespace-tolerant regex — survives tabs vs spaces
+      // and upstream reformatting.
+      const anchoredPattern =
+        /(\)\s*:\s*\(\s*<BoardContent\b[\s\S]*?\/>[\s\S]*?\)\s*:\s*\(\s*)(<TableContent\b[\s\S]*?\/>)(\s*\)\s*\})/m;
 
-      const anchor = "onSelectionChange={handleSelectionChange}";
-      const idx = result.indexOf(anchor);
-
-      if (idx === -1) {
+      if (!anchoredPattern.test(result)) {
         throw new Error(
-          'Cannot find "onSelectionChange={handleSelectionChange}" in TasksView.tsx.\n' +
-            "       Upstream may have renamed this prop.\n" +
-            "       Manually add <ProviderSidebarSections /> after the TableContent closing />.",
+          "Cannot find BoardContent → TableContent ternary sequence in TasksView.tsx.\n" +
+            "  Expected: ... ? <BoardContent ... /> : <TableContent ... />\n" +
+            "  Upstream may have restructured the view-mode render block.",
         );
       }
 
-      // Find the /> that immediately follows the anchor
-      const afterAnchor = result.indexOf("/>", idx);
-      if (afterAnchor === -1) {
-        throw new Error("Cannot find closing /> after onSelectionChange prop.");
-      }
-
-      // Detect indentation of the line containing the closing />
-      const lineStart = result.lastIndexOf("\n", afterAnchor) + 1;
-      const indentMatch = result.slice(lineStart, afterAnchor).match(/^(\s*)/);
-      const indent = indentMatch ? indentMatch[1] : "                        ";
-
-      const injection =
-        `\n${indent}{/* ── Beads fork 003 ─────────────────────────────────────────────── */}\n` +
-        `${indent}<ProviderSidebarSections />\n` +
-        `${indent}{/* ──────────────────────────────────────────────────────────────────── */}`;
-
-      // Insert after the /> (+2 moves past both characters)
-      result =
-        result.slice(0, afterAnchor + 2) +
-        injection +
-        result.slice(afterAnchor + 2);
+      result = result.replace(
+        anchoredPattern,
+        (_, prefix, tableContent, suffix) =>
+          `${prefix}<>\n${tableContent}\n` +
+          `{/* ── Beads fork 003 ─────────────────────────────────────────────── */}\n` +
+          `<ProviderSidebarSections />\n` +
+          `{/* ──────────────────────────────────────────────────────────────────── */}\n` +
+          `</>${suffix}`,
+      );
 
       return result;
     },
