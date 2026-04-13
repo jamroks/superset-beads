@@ -144,26 +144,36 @@ const INJECTIONS: Injection[] = [
           "// ─────────────────────────────────────────────────────────────────────────────\n",
       );
 
-      // Step 2: inject <ProviderSidebarSections /> after <TableContent which is
-      // the last task content component in upstream's TasksView (line ~170).
-      const anchors = [/<TableContent/, /<BoardContent/];
-
+      // Step 2: inject <ProviderSidebarSections /> after TableContent's closing />.
+      // TableContent is a self-closing JSX element. Its closing /> immediately follows
+      // its last prop. We anchor on onSelectionChange which is TableContent-specific,
+      // matching the /> that closes it.
       const jsx =
         "\n      {/* ── Beads fork 003 ─────────────────────────────────────────────────── */}\n" +
         "      <ProviderSidebarSections />\n" +
         "      {/* ─────────────────────────────────────────────────────────────────────── */}";
 
-      for (const anchor of anchors) {
-        if (anchor.test(result)) {
-          result = after(result, anchor, jsx);
-          return result;
-        }
+      // Primary anchor: the closing /> that terminates the TableContent block.
+      // onSelectionChange is unique to TableContent — use it to locate the right />
+      const tableContentClose = /onSelectionChange=\{[^}]+\}\s*\n(\s*)\/>/;
+
+      if (tableContentClose.test(result)) {
+        // Replace the closing /> with /> + our injection
+        result = result.replace(tableContentClose, (match) => match + jsx);
+        return result;
+      }
+
+      // Fallback: anchor on the closing /> of BoardContent (the else branch component)
+      const boardContentClose = /onTaskClick=\{handleTaskClick\}\s*\n(\s*)\/>/;
+      if (boardContentClose.test(result)) {
+        result = result.replace(boardContentClose, (match) => match + jsx);
+        return result;
       }
 
       throw new Error(
-        "Cannot find <TableContent or <BoardContent in TasksView.tsx.\n" +
+        "Cannot find TableContent or BoardContent closing /> in TasksView.tsx.\n" +
           "       Upstream may have refactored the tasks view.\n" +
-          "       Manually add <ProviderSidebarSections /> in the tasks JSX.",
+          "       Manually add <ProviderSidebarSections /> after the last task content component.",
       );
     },
   },
