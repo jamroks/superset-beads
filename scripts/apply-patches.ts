@@ -144,37 +144,44 @@ const INJECTIONS: Injection[] = [
           "// ─────────────────────────────────────────────────────────────────────────────\n",
       );
 
-      // Step 2: inject <ProviderSidebarSections /> after TableContent's closing />.
-      // TableContent is a self-closing JSX element. Its closing /> immediately follows
-      // its last prop. We anchor on onSelectionChange which is TableContent-specific,
-      // matching the /> that closes it.
-      const jsx =
-        "\n      {/* ── Beads fork 003 ─────────────────────────────────────────────────── */}\n" +
-        "      <ProviderSidebarSections />\n" +
-        "      {/* ─────────────────────────────────────────────────────────────────────── */}";
+      // Step 2: inject <ProviderSidebarSections /> after the closing /> of TableContent.
+      // Exact anchor: onSelectionChange={handleSelectionChange} is unique to TableContent.
+      // We find it with indexOf (no regex), then find the next /> and insert after it.
 
-      // Primary anchor: the closing /> that terminates the TableContent block.
-      // onSelectionChange is unique to TableContent — use it to locate the right />
-      const tableContentClose = /onSelectionChange=\{[^}]+\}\s*\n(\s*)\/>/;
+      const anchor = "onSelectionChange={handleSelectionChange}";
+      const idx = result.indexOf(anchor);
 
-      if (tableContentClose.test(result)) {
-        // Replace the closing /> with /> + our injection
-        result = result.replace(tableContentClose, (match) => match + jsx);
-        return result;
+      if (idx === -1) {
+        throw new Error(
+          'Cannot find "onSelectionChange={handleSelectionChange}" in TasksView.tsx.\n' +
+            "       Upstream may have renamed this prop.\n" +
+            "       Manually add <ProviderSidebarSections /> after the TableContent closing />.",
+        );
       }
 
-      // Fallback: anchor on the closing /> of BoardContent (the else branch component)
-      const boardContentClose = /onTaskClick=\{handleTaskClick\}\s*\n(\s*)\/>/;
-      if (boardContentClose.test(result)) {
-        result = result.replace(boardContentClose, (match) => match + jsx);
-        return result;
+      // Find the /> that immediately follows the anchor
+      const afterAnchor = result.indexOf("/>", idx);
+      if (afterAnchor === -1) {
+        throw new Error("Cannot find closing /> after onSelectionChange prop.");
       }
 
-      throw new Error(
-        "Cannot find TableContent or BoardContent closing /> in TasksView.tsx.\n" +
-          "       Upstream may have refactored the tasks view.\n" +
-          "       Manually add <ProviderSidebarSections /> after the last task content component.",
-      );
+      // Detect indentation of the line containing the closing />
+      const lineStart = result.lastIndexOf("\n", afterAnchor) + 1;
+      const indentMatch = result.slice(lineStart, afterAnchor).match(/^(\s*)/);
+      const indent = indentMatch ? indentMatch[1] : "                        ";
+
+      const injection =
+        `\n${indent}{/* ── Beads fork 003 ─────────────────────────────────────────────── */}\n` +
+        `${indent}<ProviderSidebarSections />\n` +
+        `${indent}{/* ──────────────────────────────────────────────────────────────────── */}`;
+
+      // Insert after the /> (+2 moves past both characters)
+      result =
+        result.slice(0, afterAnchor + 2) +
+        injection +
+        result.slice(afterAnchor + 2);
+
+      return result;
     },
   },
 
