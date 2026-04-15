@@ -1,33 +1,16 @@
 /**
- * ProviderSidebarSections
+ * Renderer-side provider sections.
  *
- * Renders the SidebarSection component from every registered task provider.
- * This is injected into TasksView.tsx via patch 003.
- *
- * File: apps/desktop/src/renderer/.../lib/task-providers/ProviderSidebarSections.tsx
- *
- * When upstream merges the registry PR, this component becomes part of
- * upstream's TasksView directly, and the patch is deleted.
+ * Keep this intentionally simple: renderer and main do not share live module
+ * state, so we render custom provider sections explicitly here.
  */
 
-import React from 'react'
-import { getTaskProviders } from './registry'
+import { BeadsTasksSection } from './beads/ui/BeadsTasksSection'
 
 export function ProviderSidebarSections() {
-  const providers = getTaskProviders()
-
-  if (providers.length === 0) return null
-
   return (
-    <>
-      {providers.map(provider => {
-        const Section = provider.SidebarSection
-        return (
-          <div key={provider.id} className="border-t border-border pt-px">
-            <Section />
-          </div>
-        )
-      })}
-    </>
+    <div className="border-t border-border pt-px">
+      <BeadsTasksSection />
+    </div>
   )
 }

@@ -168,7 +168,7 @@ async function main() {
   console.log('✓ Merge complete')
   log(`Merged upstream ${upstreamSha.slice(0, 12)}`)
 
-  // ── 6. Reinstall dependencies (patch-package runs via postinstall) ────────
+  // ── 6. Reinstall dependencies (apply-patches.ts runs via postinstall) ────────
   section('6. Installing dependencies + applying patches')
 
   await $`bun install`

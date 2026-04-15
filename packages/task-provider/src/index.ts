@@ -100,9 +100,10 @@ export interface TaskProvider {
   router: AnyRouter
 
   /**
-   * React component rendered as a collapsible section in the Tasks sidebar.
-   * Must be self-contained — fetches its own data via the tRPC hook.
-   * Receives no props; reads workspace context from useActiveWorkspace().
+   * React component that can be used by the renderer host to display this
+   * provider in the Tasks sidebar. In practice the desktop host may choose to
+   * render provider sections explicitly rather than via this field, because
+   * renderer and main process module state are isolated in Electron.
    */
   SidebarSection: ComponentType
 

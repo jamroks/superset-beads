@@ -128,8 +128,8 @@ const INJECTIONS: Injection[] = [
 
   // ── 003 ─ ProviderSidebarSections in TasksView.tsx ───────────────────────────
   //
-  // Adds the import and renders <ProviderSidebarSections /> in the tasks sidebar
-  // after the existing Linear and GitHub sections.
+  // Adds the import and renders <ProviderSidebarSections /> next to
+  // <TableContent /> only in the final ternary branch.
   {
     name: "003 — ProviderSidebarSections in TasksView",
     file: "apps/desktop/src/renderer/routes/_authenticated/_dashboard/tasks/components/TasksView/TasksView.tsx",
@@ -144,35 +144,38 @@ const INJECTIONS: Injection[] = [
           "// ─────────────────────────────────────────────────────────────────────────────\n",
       );
 
-      // Step 2: rewrite the final ternary branch:
-      //   ) : ( <TableContent ... /> )}
-      // into:
-      //   ) : ( <> <TableContent ... /> <ProviderSidebarSections /> </> )}
-      //
-      // Anchored on BoardContent → TableContent sequence so it never hits
-      // the wrong ternary. Whitespace-tolerant regex — survives tabs vs spaces
-      // and upstream reformatting.
-      const anchoredPattern =
-        /(\)\s*:\s*\(\s*<BoardContent\b[\s\S]*?\/>[\s\S]*?\)\s*:\s*\(\s*)(<TableContent\b[\s\S]*?\/>)(\s*\)\s*\})/m;
+      // Step 2: replace the final TableContent branch with a Fragment wrapper.
+      const tableBranchPattern =
+        /(\)\s*:\s*\(\s*)<TableContent\s*\n([ \t]*)filterTab=\{currentTab\}\s*\n\2searchQuery=\{searchQuery\}\s*\n\2assigneeFilter=\{assigneeFilter\}\s*\n\2onTaskClick=\{handleTaskClick\}\s*\n\2onSelectionChange=\{handleSelectionChange\}\s*\n([ \t]*)\/>(\s*\)\s*\})/m;
 
-      if (!anchoredPattern.test(result)) {
+      const match = result.match(tableBranchPattern);
+      if (!match) {
         throw new Error(
-          "Cannot find BoardContent → TableContent ternary sequence in TasksView.tsx.\n" +
-            "  Expected: ... ? <BoardContent ... /> : <TableContent ... />\n" +
-            "  Upstream may have restructured the view-mode render block.",
+          "Cannot find TableContent else branch in TasksView.tsx.\n" +
+            "  Expected the known TableContent prop block.\n" +
+            "  Upstream likely changed the prop order or render structure.",
         );
       }
 
-      result = result.replace(
-        anchoredPattern,
-        (_, prefix, tableContent, suffix) =>
-          `${prefix}<>\n${tableContent}\n` +
-          `{/* ── Beads fork 003 ─────────────────────────────────────────────── */}\n` +
-          `<ProviderSidebarSections />\n` +
-          `{/* ──────────────────────────────────────────────────────────────────── */}\n` +
-          `</>${suffix}`,
-      );
+      const [, prefix, propIndent, closingIndent, suffix] = match;
+      const fragmentIndent =
+        propIndent.length > 0 ? propIndent.slice(0, -1) : propIndent;
 
+      const replacement =
+        `${prefix}<>\n` +
+        `${propIndent}<TableContent\n` +
+        `${propIndent}filterTab={currentTab}\n` +
+        `${propIndent}searchQuery={searchQuery}\n` +
+        `${propIndent}assigneeFilter={assigneeFilter}\n` +
+        `${propIndent}onTaskClick={handleTaskClick}\n` +
+        `${propIndent}onSelectionChange={handleSelectionChange}\n` +
+        `${closingIndent}/>\n` +
+        `${closingIndent}{/* ── Beads fork 003 ─────────────────────────────────────────────── */}\n` +
+        `${closingIndent}<ProviderSidebarSections />\n` +
+        `${closingIndent}{/* ──────────────────────────────────────────────────────────────────── */}\n` +
+        `${fragmentIndent}</>${suffix}`;
+
+      result = result.replace(tableBranchPattern, replacement);
       return result;
     },
   },

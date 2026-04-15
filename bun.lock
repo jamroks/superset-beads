@@ -164,6 +164,7 @@
         "@superset/macos-process-metrics": "workspace:*",
         "@superset/panes": "workspace:*",
         "@superset/shared": "workspace:*",
+        "@superset/task-provider": "workspace:*",
         "@superset/trpc": "workspace:*",
         "@superset/ui": "workspace:*",
         "@superset/workspace-client": "workspace:*",
